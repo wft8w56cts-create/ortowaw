@@ -172,21 +172,36 @@ Opto waw
             }
         }
 
-        function scanDistricts() {
-            districts = [];
-            const allPaths = document.querySelectorAll('#warsaw-svg path');
-            
-            allPaths.forEach(path => {
-                const id = path.id;
-                if (id && id !== "Wielka_Wisła" && id !== "svg1" && !id.startsWith("path") && !id.startsWith("clipPath") && !id.startsWith("defs")) {
-                    districts.push(path);
-                }
-            });
-
-            document.getElementById('total-levels').innerText = districts.length;
-            isSystemActive = true;
-            initLevel(currentLevel);
+       
+function scanDistricts() {
+    districts = [];
+    const allPaths = document.querySelectorAll('#warsaw-svg path');
+    
+    allPaths.forEach(path => {
+        const id = path.id;
+        // Ignorujemy tylko definicje systemowe i wielkie maski tła
+        if (id && !id.startsWith("clipPath") && id !== "path1" && id !== "path2" && id !== "path3" && id !== "path4") {
+            districts.push(path);
         }
+    });
+
+    // Jeśli ścieżki nie mają ładnych nazw, nadajemy im nazwy robocze
+    districts.forEach((path, index) => {
+        if (!path.id || path.id.startsWith("path")) {
+            path.setAttribute("id", `Obszar_${index + 1}`);
+        }
+    });
+
+    if (districts.length === 0) {
+        targetInfo.innerText = "❌ Nie znaleziono dzielnic wewnątrz SVG!";
+        return;
+    }
+
+    document.getElementById('total-levels').innerText = districts.length;
+    isSystemActive = true;
+    initLevel(currentLevel);
+}
+
 
         function initLevel(levelIndex) {
             if(!isSystemActive || districts.length === 0) return;
