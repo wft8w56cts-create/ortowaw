@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Ścieżka A (Biofeedback)</title>
+    <title>Trening Optometryczny - Ścieżka A (Wskaźnik Graficzny)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -54,10 +54,20 @@
         #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.4; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* Dyskretny baner statusu postawy na dole ekranu gry */
-        #status-bar {
-            position: absolute; bottom: 30px; left: 20px; font-size: 1.4rem;
-            font-weight: bold; text-shadow: 0 0 10px #000; z-index: 1000;
+        /* NOWOŚĆ: PANEL BIOFEEDBACKU GŁOWY (Płynny wskaźnik od czerwieni do zieleni) */
+        #posture-widget {
+            position: absolute; bottom: 30px; left: 30px; width: 240px; 
+            background: rgba(0, 0, 10, 0.7); padding: 15px; border-radius: 15px;
+            border: 1px solid #222; z-index: 1000; display: flex; flex-direction: column; align-items: center;
+        }
+        .widget-label { color: #888; font-size: 0.8rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px; }
+        #head-icon { font-size: 1.8rem; margin-bottom: 5px; transition: transform 0.1s ease; }
+        .bar-container { position: relative; width: 100%; height: 8px; background: #111; border-radius: 4px; overflow: visible; }
+        .safety-zone { position: absolute; left: 35%; width: 30%; height: 100%; background: rgba(0, 255, 200, 0.2); border-left: 1px solid rgba(0,255,200,0.4); border-right: 1px solid rgba(0,255,200,0.4); }
+        #indicator-dot {
+            position: absolute; top: -4px; left: 50%; width: 16px; height: 16px;
+            background: #00ffcc; border-radius: 50%; transform: translateX(-50%);
+            box-shadow: 0 0 10px #00ffcc; transition: left 0.1s ease, background 0.2s, box-shadow 0.2s;
         }
     </style>
 </head>
@@ -65,7 +75,7 @@
 
     <div id="menu-screen">
         <h1 style="font-size: 2.2rem; margin-bottom: 5px; letter-spacing: 1px;">TRENING OPTOMETRYCZNY</h1>
-        <p style="color: #00ffcc; margin-bottom: 25px; font-weight: bold;">Ścieżka A: Kamera internetowa + Ciągły Biofeedback</p>
+        <p style="color: #00ffcc; margin-bottom: 25px; font-weight: bold;">Ścieżka A: Kamera internetowa + Graficzny Biofeedback</p>
 
         <div class="setup-section">
             <label style="font-weight: bold; color: #ffffff;">WYBIERZ TRYB GRY:</label>
@@ -95,7 +105,16 @@
     <div id="game-container">
         <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
         <div id="hud-panel"><span id="hud-text">Uruchamianie...</span></div>
-        <div id="status-bar"><span id="status-text">👍 Dobra postawa</span></div>
+        
+        <div id="posture-widget">
+            <div class="widget-label">POZYCJA GŁOWY</div>
+            <div id="head-icon">👦</div>
+            <div class="bar-container">
+                <div class="safety-zone"></div>
+                <div id="indicator-dot"></div>
+            </div>
+        </div>
+
         <canvas id="game-canvas"></canvas>
         <div id="flashlight"></div>
     </div>
@@ -110,8 +129,11 @@
         const flashlight = document.getElementById('flashlight');
         const videoElement = document.getElementById('webcam');
         const hudText = document.getElementById('hud-text');
-        const statusText = document.getElementById('status-text');
         const btnDownload = document.getElementById('btn-download');
+        
+        // Elementy wskaźnika graficznego
+        const indicatorDot = document.getElementById('indicator-dot');
+        const headIcon = document.getElementById('head-icon');
 
         let gameMode = 'rocket';
         let mazeType = '1';
@@ -120,10 +142,11 @@
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
 
-        // BIOFEEDBACK: Flaga i zmienne ruchu głowy
+        // Wartości wychylenia głowy (0.5 to środek ekranu)
         let isHeadMoving = false;
         let baseHeadX = null;
-        let lastNoseX = null;
+        let currentHeadDeviation = 0; // Odchył od środka: od -100 (lewo) do +100 (prawo)
+        const HEAD_TOLERANCE = 0.022;  
         
         let telemetryLog = [];
         let sessionStartTime = 0;
@@ -246,7 +269,7 @@
             telemetryLog = [];
             sessionStartTime = performance.now();
             lastLogTime = 0;
-            baseHeadX = null; // Autokalibracja pozycji głowy na starcie ćwiczenia
+            baseHeadX = null; 
 
             if (gameMode === 'rocket') {
                 rocketMode1.x = canvas.width * 0.1; rocketMode1.y = canvas.height / 2;
@@ -276,27 +299,49 @@
 
         let lastSoundTime = 0;
 
+        function updatePostureWidget() {
+            // Zamiana odchylenia matematycznego na pozycję procentową paska (od 0% do 100%)
+            // Ponieważ obraz z kamery jest odwrócony, mnożymy przez -1, aby kierunek ruchu kropki odpowiadał przechyleniu dziecka
+            let visualLeft = 50 - (currentHeadDeviation * 450); 
+            visualLeft = Math.max(0, Math.min(100, visualLeft));
+            
+            indicatorDot.style.left = `${visualLeft}%`;
+
+            // Efekt wizualny (rotacja ikonki oraz kolor kropki)
+            let rotationAngle = (visualLeft - 50) * 0.4;
+            headIcon.style.transform = `rotate(${rotationAngle}deg)`;
+
+            if (isHeadMoving) {
+                // Poza strefą bezpieczną - żółty lub czerwony w zależności od wielkości błędu
+                let severity = Math.abs(visualLeft - 50);
+                if (severity > 30) {
+                    indicatorDot.style.backgroundColor = "#ff2255";
+                    indicatorDot.style.boxShadow = "0 0 12px #ff2255";
+                } else {
+                    indicatorDot.style.backgroundColor = "#ffcc00";
+                    indicatorDot.style.boxShadow = "0 0 12px #ffcc00";
+                }
+            } else {
+                // Idealnie prosto - piękny zielony/turkusowy kolor
+                indicatorDot.style.backgroundColor = "#00ffcc";
+                indicatorDot.style.boxShadow = "0 0 12px #00ffcc";
+            }
+        }
+
         function gameLoop() {
             if (!isGameRunning) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Latarka działa ZAWSZE pod kontrolą myszki/wzroku, bez względu na ruch głowy
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            // Aktualizacja dyskretnego paska biofeedbacku na dole ekranu
-            if (isHeadMoving) {
-                statusText.innerText = "⚠️ UNIERUCHOM GŁOWĘ, aby zdobywać punkty!";
-                statusText.style.color = "#ffcc00";
-            } else {
-                statusText.innerText = "👍 Dobra postawa! Punktowanie aktywne.";
-                statusText.style.color = "#00ffcc";
-            }
+            // Aktualizacja graficznego interfejsu biofeedbacku
+            updatePostureWidget();
 
             let nowTime = performance.now();
 
-            // --- TRYB 1: GONIĄCA RAKIETA (Zliczanie czasu oświetlenia) ---
+            // --- TRYB 1: GONIĄCA RAKIETA ---
             if (gameMode === 'rocket') {
                 let oldX = rocketMode1.x; let oldY = rocketMode1.y;
                 rocketMode1.x += rocketMode1.speed * rocketMode1.direction;
@@ -307,8 +352,6 @@
                 targetPos.x = rocketMode1.x; targetPos.y = rocketMode1.y;
 
                 let dist = Math.hypot(currentX - rocketMode1.x, currentY - rocketMode1.y);
-                
-                // Zliczanie pulsu/efektu zachodzi TYLKO gdy latarka trafia ORAZ głowa jest stabilna
                 if (dist < 75 && !isHeadMoving) {
                     rocketMode1.isLit = true; rocketMode1.pulse += 0.15;
                     if (nowTime - lastSoundTime > 120) {
@@ -322,7 +365,7 @@
                 }
                 drawVectorRocket(rocketMode1.x, rocketMode1.y, rocketMode1.radius, rocketMode1.angle, rocketMode1.isLit, rocketMode1.pulse);
 
-            // --- TRYB 2: ROBACZEK (Idzie do przodu tylko przy prostej głowie) ---
+            // --- TRYB 2: ROBACZEK ---
             } else if (gameMode === 'bug') {
                 ctx.beginPath(); ctx.lineWidth = 35; ctx.strokeStyle = '#101030'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                 for (let i = 0; i < mazePoints.length; i++) {
@@ -335,8 +378,6 @@
                 targetPos.x = bugPos.x; targetPos.y = bugPos.y;
 
                 let distanceToFlashlight = Math.hypot(currentX - bugPos.x, currentY - bugPos.y);
-                
-                // Robaczek idzie tylko gdy jest oświetlony ORAZ głowa stoi nieruchomo
                 if (distanceToFlashlight < 60 && !isHeadMoving) {
                     bug.progress += bug.speed;
                     if(!bug.isLit) playBeep(500, 0.05);
@@ -351,7 +392,7 @@
                 ctx.beginPath(); ctx.arc(bugPos.x, bugPos.y, bug.size, 0, Math.PI * 2);
                 ctx.fillStyle = bug.isLit ? '#00ffcc' : '#005544'; ctx.fill();
 
-            // --- TRYB 3: PIERWOTNA RAKIETA (Wyszukiwanie w ruchu) ---
+            // --- TRYB 3: PIERWOTNA RAKIETA ---
             } else if (gameMode === 'classic') {
                 classicRocket.x += classicRocket.vx; classicRocket.y += classicRocket.vy;
                 if(classicRocket.x < canvas.width*0.1 || classicRocket.x > canvas.width*0.9) classicRocket.vx *= -1;
@@ -363,7 +404,6 @@
                 let dist = Math.hypot(currentX - classicRocket.x, currentY - classicRocket.y);
                 let isLit = dist < 65;
 
-                // Ładowanie paska wybuchu rośnie TYLKO gdy patrzy ORAZ głowa jest prosto
                 if (isLit && !isHeadMoving) {
                     classicRocket.lockTime += 16.6; 
                     ctx.beginPath(); ctx.arc(classicRocket.x, classicRocket.y, classicRocket.radius + 15, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
@@ -377,7 +417,6 @@
                         spawnClassicRocket();
                     }
                 } else {
-                    // Stopniowe wygaszanie paska, jeśli warunki nie są spełnione
                     classicRocket.lockTime = Math.max(0, classicRocket.lockTime - 12); 
                 }
 
@@ -390,7 +429,6 @@
                 let dist = Math.hypot(currentX - staticRocket.x, currentY - staticRocket.y);
                 let isLit = dist < 65;
 
-                // Ładowanie fiksacji zachodzi TYLKO przy nieruchomej głowie
                 if (isLit && !isHeadMoving) {
                     staticRocket.lockTime += 16.6;
                     ctx.beginPath(); ctx.arc(staticRocket.x, staticRocket.y, staticRocket.radius + 15, 0, (Math.PI * 2) * (staticRocket.lockTime / 1500));
@@ -410,7 +448,7 @@
                 drawVectorRocket(staticRocket.x, staticRocket.y, staticRocket.radius, staticRocket.angle, (isLit && !isHeadMoving), staticRocket.lockTime*0.02);
             }
 
-            // Eksplozje cząsteczek
+            // Eksplozje
             for(let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 0.02;
                 if(p.alpha <= 0) { particles.splice(i, 1); } 
@@ -420,7 +458,7 @@
                 }
             }
 
-            // TELEMETRIA: Zapis co 50 ms (0 = stabilna głowa, 1 = ruch głowy)
+            // TELEMETRIA
             let elapsed = nowTime - sessionStartTime;
             if (elapsed - lastLogTime >= 50) {
                 telemetryLog.push({
@@ -429,7 +467,8 @@
                     targetY: Math.round(targetPos.y),
                     gazeX: Math.round(currentX),
                     gazeY: Math.round(currentY),
-                    headMovement: isHeadMoving ? 1 : 0
+                    headMovement: isHeadMoving ? 1 : 0,
+                    headDeviation: roundTo(currentHeadDeviation, 4)
                 });
                 lastLogTime = elapsed;
             }
@@ -437,24 +476,28 @@
             requestAnimationFrame(gameLoop);
         }
 
+        function roundTo(num, places) { return +(math = Math.round(num + "e+" + places)  + "e-" + places); }
+
         window.addEventListener('mousemove', (e) => {
             if (!isGameRunning) return;
             currentX = e.clientX; currentY = e.clientY;
         });
 
-        // --- MEDIAPIPE: ŚLEDZENIE RUCHU GŁOWY ---
+        // --- MEDIAPIPE: ANALIZA VECTORA GŁOWY ---
         const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
         faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const noseX = results.multiFaceLandmarks[0][4].x;
-                lastNoseX = noseX;
                 
                 if (baseHeadX === null) baseHeadX = noseX;
                 
-                // Sprawdzanie odchylenia pozycji głowy (czułość biofeedbacku)
-                if (Math.abs(noseX - baseHeadX) > 0.022) {
+                // Wyliczanie fizycznego przesunięcia od punktu zero
+                currentHeadDeviation = noseX - baseHeadX;
+
+                // Sprawdzanie czy przekracza tolerancję
+                if (Math.abs(currentHeadDeviation) > HEAD_TOLERANCE) {
                     isHeadMoving = true;
                 } else {
                     isHeadMoving = false;
@@ -471,14 +514,14 @@
         // --- ZAPIS CSV ---
         function downloadCSV() {
             if (telemetryLog.length === 0) return;
-            let csvContent = "data:text/csv;charset=utf-8,Czas_ms,Cel_X,Cel_Y,Wzrok_X,Wzrok_Y,Ruch_Glowy\n";
+            let csvContent = "data:text/csv;charset=utf-8,Czas_ms,Cel_X,Cel_Y,Wzrok_X,Wzrok_Y,Blad_Glowy,Surowy_Odchyl_X\n";
             telemetryLog.forEach(row => {
-                csvContent += `${row.timestamp},${row.targetX},${row.targetY},${row.gazeX},${row.gazeY},${row.headMovement}\n`;
+                csvContent += `${row.timestamp},${row.targetX},${row.targetY},${row.gazeX},${row.gazeY},${row.headMovement},${row.headDeviation}\n`;
             });
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `raport_sciezka_A_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", `raport_graficzny_A_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
