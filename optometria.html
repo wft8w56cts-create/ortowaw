@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Sphero Mini i Detekcja Twarzy</title>
+    <title>Trening Optometryczny - Rakieta i Robaczek</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -12,296 +11,332 @@
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #000;
+            overflow: hidden; background-color: #020208;
             font-family: 'Segoe UI', Arial, sans-serif; cursor: none;
         }
 
-        #game-container {
-            position: relative; width: 100vw; height: 100vh;
-            background: #050510; overflow: hidden;
+        /* Ekran wyboru trybu gry */
+        #menu-screen {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #050514; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999; color: white;
+            cursor: default;
         }
-
-        /* Bardzo ciemne, klimatyczne tło kosmosu widoczne tylko w świetle latarki */
-        #background-content {
-            position: absolute; width: 100%; height: 100%;
-            background-image: url('https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=2070');
-            background-size: cover; background-position: center;
-            opacity: 0.15;
+        .setup-section {
+            background: rgba(255,255,255,0.05); padding: 25px; 
+            border-radius: 15px; margin: 15px; width: 350px; text-align: center;
+            border: 1px solid #1a1a3a;
         }
+        select, button {
+            padding: 12px 20px; font-size: 1rem; font-weight: bold; border-radius: 25px;
+            border: none; margin-top: 10px; width: 100%; cursor: pointer; font-family: inherit;
+        }
+        select { background: #1a1a3a; color: white; border: 1px solid #333; }
+        #btn-start { background: #ff3366; color: white; font-size: 1.5rem; margin-top: 20px; box-shadow: 0 0 20px #ff3366; }
+        #btn-start:hover { background: #00ffcc; color: black; box-shadow: 0 0 20px #00ffcc; }
 
-        /* Plama światła "latarki" */
+        /* Kontener gry i elementy wizualne */
+        #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
+        
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
         #flashlight {
-            position: absolute; width: 250px; height: 250px;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.8) 40%, rgba(255,255,255,0) 70%);
+            position: absolute; width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 40%, rgba(255,255,255,0) 70%);
             border-radius: 50%; transform: translate(-50%, -50%);
-            pointer-events: none; mix-blend-mode: screen;
-            box-shadow: 0 0 50px rgba(255,255,255,0.5);
-            left: 50%; top: 50%; /* Start na środku */
+            pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 5;
         }
 
-        /* Cel (Rakieta), który ukrywa się w mroku */
-        .target {
-            position: absolute; width: 60px; height: 60px;
-            background: #00ffcc; border-radius: 50%;
-            box-shadow: 0 0 20px #00ffcc; display: flex;
-            align-items: center; justify-content: center;
-            font-size: 30px; transform: translate(-50%, -50%);
-            opacity: 0.02; 
-            /* Płynne animacje dla pojawiania się i celebracji */
-            transition: opacity 0.2s, transform 0.5s ease-out, background 0.3s;
-        }
-
-        /* Gdy latarka oświetla cel */
-        .target.revealed { 
-            opacity: 1 !important; 
-        }
-
-        /* Panel interfejsu (Bluetooth i Punkty) */
-        #menu-panel {
-            position: absolute; top: 20px; left: 20px;
-            color: #fff; z-index: 1000; pointer-events: auto;
-        }
-
-        button {
-            background: #00ffcc; border: none; padding: 12px 24px;
-            font-size: 1rem; font-weight: bold; border-radius: 50px;
-            cursor: pointer; box-shadow: 0 0 15px #00ffcc;
-            font-family: inherit; transition: all 0.2s;
-        }
-        button:hover { transform: scale(1.05); background: #fff; box-shadow: 0 0 25px #fff; }
-
-        #hud { margin-top: 15px; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
-
-        /* Miniaturka z kamerki w prawym dolnym rogu (kontrola pozycji) */
-        #webcam-container {
-            position: absolute; bottom: 10px; right: 10px;
-            width: 160px; height: 120px; border: 2px solid #333;
-            border-radius: 8px; overflow: hidden; opacity: 0.5; transform: scaleX(-1);
-        }
+        /* HUD i Panele */
+        #hud-panel { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 1000; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
+        #btn-back { position: absolute; top: 20px; right: 20px; background: #333; color: white; width: auto; font-size: 0.9rem; padding: 8px 15px; z-index: 1000; }
+        
+        #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.3; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
-
-        /* Czerwony ekran blokady, gdy dziecko poruszy głową */
-        #warning-overlay {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 0, 0, 0.6); color: white;
-            justify-content: center; align-items: center; font-size: 3rem;
-            font-weight: bold; text-shadow: 2px 2px 10px #000; z-index: 999; text-align: center;
+        
+        /* Ekran ostrzeżenia o ruchu głowy z opcjami interaktywnymi */
+        #warning-overlay { 
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(200, 0, 0, 0.9); color: white; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999; text-align: center; 
         }
+        .warning-title { font-size: 3.5rem; font-weight: bold; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .warning-subtitle { font-size: 1.6rem; margin-bottom: 35px; color: #ffcccc; }
+        .warning-actions { display: flex; gap: 20px; width: 500px; }
+        .btn-warning { font-size: 1.1rem; padding: 15px 25px; border-radius: 30px; border: 2px solid white; transition: all 0.2s; }
+        #btn-recalibrate { background: white; color: #c80000; }
+        #btn-recalibrate:hover { background: #00ffcc; color: black; border-color: #00ffcc; }
+        #btn-menu-exit { background: transparent; color: white; }
+        #btn-menu-exit:hover { background: rgba(255,255,255,0.2); }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
-        <div id="background-content"></div>
-        <div id="flashlight"></div>
-        <div id="target" class="target">🚀</div>
-        
-        <div id="menu-panel">
-            <button id="btn-connect" onclick="connectSphero()">🔗 POŁĄCZ SPHERO MINI</button>
-            <div id="hud">Punkty: <span id="score">0</span></div>
+    <div id="menu-screen">
+        <h1 style="font-size: 2.5rem; margin-bottom: 5px; letter-spacing: 1px;">TRENING OPTOMETRYCZNY</h1>
+        <p style="color: #878787; margin-bottom: 35px;">Zezwól na dostęp do kamery i wybierz ćwiczenie</p>
+
+        <div class="setup-section">
+            <label style="font-weight: bold; color: #00ffcc;">1. WYBIERZ TRYB GRY:</label>
+            <select id="game-mode-select" onchange="toggleMazeOptions()">
+                <option value="rocket">Tryb 1: Goniąca Rakieta</option>
+                <option value="bug">Tryb 2: Robaczek w labiryncie</option>
+            </select>
         </div>
+
+        <div class="setup-section" id="maze-config" style="display: none;">
+            <label style="font-weight: bold; color: #ffcc00;">2. WYBIERZ WERSJĘ LABIRYNTU:</label>
+            <select id="maze-type-select">
+                <option value="1">Labirynt 1: Prosta Fala</option>
+                <option value="2">Labirynt 2: Średnia Pętla</option>
+                <option value="3">Labirynt 3: Zakręcona Spirala</option>
+            </select>
+        </div>
+
+        <div style="width: 350px;">
+            <button id="btn-start" onclick="startGame()">URUCHOM ĆWICZENIE 🚀</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
+        <div id="hud-panel">Zadanie: <span id="hud-text">Uruchamianie...</span></div>
+        <canvas id="game-canvas"></canvas>
+        <div id="flashlight"></div>
         
         <div id="warning-overlay">
-            NIE RUSZAJ GŁOWĄ!<br>
-            <span style="font-size: 1.5rem;">Trzymaj głowę prosto, steruj tylko ręką i oczami</span>
+            <div class="warning-title">NIE RUSZAJ GŁOWĄ!</div>
+            <div class="warning-subtitle">Trzymaj pozycję pionową, pracuj tylko oczami.</div>
+            <div class="warning-actions">
+                <button class="btn-warning" id="btn-menu-exit" onclick="exitToMenu()">⚙️ WYJŚĆ DO MENU</button>
+                <button class="btn-warning" id="btn-recalibrate" onclick="recalibrateHead()">🔄 REKALIBRACJA</button>
+            </div>
         </div>
     </div>
 
-    <div id="webcam-container">
-        <video id="webcam" autoplay playsinline></video>
-    </div>
+    <div id="webcam-container"><video id="webcam" autoplay playsinline></video></div>
 
     <script>
+        const menuScreen = document.getElementById('menu-screen');
+        const gameContainer = document.getElementById('game-container');
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
         const flashlight = document.getElementById('flashlight');
-        const target = document.getElementById('target');
-        const scoreEl = document.getElementById('score');
         const warningOverlay = document.getElementById('warning-overlay');
         const videoElement = document.getElementById('webcam');
-        const btnConnect = document.getElementById('btn-connect');
+        const hudText = document.getElementById('hud-text');
 
-        let score = 0;
-        let isHeadMoving = false;
-        let isCelebrating = false; // Blokada gry na czas trwania animacji sukcesu
-        let baseHeadX = null;
+        let gameMode = 'rocket';
+        let mazeType = '1';
+        let isGameRunning = false;
 
-        // Wirtualne współrzędne latarki (zaczynamy na środku ekranu)
+        // Sterowanie latarką
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
 
-        // Czułość sterowania kulką Sphero Mini
-        const SENSITIVITY = 1.5; 
+        // Parametry biologiczne i śledzenie twarzy
+        let isHeadMoving = false;
+        let baseHeadX = null;
+        let lastNoseX = null; // Przechowuje ostatnią odczytaną pozycję, aby móc ją przypisać przy rekalibracji
 
-        // Funkcja nanosząca pozycję latarki na ekran
-        function updateFlashlightPosition() {
-            // Ograniczenie ruchu do obszaru okna
-            currentX = Math.max(0, Math.min(window.innerWidth, currentX));
-            currentY = Math.max(0, Math.min(window.innerHeight, currentY));
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
+        function toggleMazeOptions() {
+            const mode = document.getElementById('game-mode-select').value;
+            document.getElementById('maze-config').style.display = (mode === 'bug') ? 'block' : 'none';
+        }
+
+        function generateMaze(type) {
+            mazePoints = [];
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            if (type === '1') { 
+                for (let x = w * 0.1; x <= w * 0.9; x += 5) {
+                    let y = h / 2 + Math.sin(x * 0.008) * (h * 0.15);
+                    mazePoints.push({ x, y });
+                }
+            } else if (type === '2') { 
+                for (let t = 0; t < Math.PI * 2; t += 0.01) {
+                    let x = w / 2 + Math.sin(t) * (w * 0.35);
+                    let y = h / 2 + Math.sin(t * 2) * (h * 0.25);
+                    mazePoints.push({ x, y });
+                }
+            } else { 
+                let centerX = w / 2;
+                let centerY = h / 2;
+                for (let angle = 0; angle < Math.PI * 6; angle += 0.02) {
+                    let radius = (angle * 22) + 40;
+                    let x = centerX + Math.cos(angle) * radius;
+                    let y = centerY + Math.sin(angle) * radius;
+                    if(x > w*0.05 && x < w*0.95 && y > h*0.05 && y < h*0.95) {
+                        mazePoints.push({ x, y });
+                    }
+                }
+            }
+        }
+
+        function startGame() {
+            gameMode = document.getElementById('game-mode-select').value;
+            mazeType = document.getElementById('maze-type-select').value;
+
+            menuScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+            document.body.style.cursor = 'none';
+
+            if (gameMode === 'rocket') {
+                rocket.x = canvas.width * 0.1;
+                rocket.y = canvas.height / 2;
+                hudText.innerText = "Śledź latarką lecącą rakietę!";
+            } else {
+                generateMaze(mazeType);
+                bug.progress = 0;
+                hudText.innerText = "Oświetlaj robaczka, aby szedł do wyjścia!";
+            }
+
+            isGameRunning = true;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function exitToMenu() {
+            isGameRunning = false;
+            isHeadMoving = false;
+            warningOverlay.style.display = 'none';
+            gameContainer.style.display = 'none';
+            menuScreen.style.display = 'flex';
+            document.body.style.cursor = 'default';
+        }
+
+        // Funkcja wymuszająca rekalibrację środka pozycji głowy
+        function recalibrateHead() {
+            if (lastNoseX !== null) {
+                baseHeadX = lastNoseX; // Nadpisujemy pozycję bazową obecną pozycją dziecka
+                isHeadMoving = false;
+                warningOverlay.style.display = 'none';
+                document.body.style.cursor = 'none'; // Ponownie ukrywamy kursor dla gry
+            }
+        }
+
+        // Zmienne obiektów gry
+        let rocket = { x: 0, y: 0, speed: 2.5, direction: 1 };
+        let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
+        let mazePoints = [];
+
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Aktualizacja pozycji latarki na ekranie
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            checkCollision(currentX, currentY);
-        }
-
-        // --- 1. SPHERO MINI (WEB BLUETOOTH API) ---
-        let spheroCharacteristic = null;
-
-        async function connectSphero() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'SM-' }, { namePrefix: 'Sphero' }],
-                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                });
-
-                btnConnect.innerText = "Łączenie...";
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-                const characteristics = await service.getCharacteristics();
-                const notifyChar = characteristics.find(c => c.properties.notify);
-                
-                if (notifyChar) {
-                    await notifyChar.startNotifications();
-                    notifyChar.addEventListener('characteristicvaluechanged', handleSpheroSensors);
-                    
-                    spheroCharacteristic = notifyChar; // Oznaczenie, że aktywowaliśmy Sphero
-                    
-                    btnConnect.innerText = "🟢 POŁĄCZONO!";
-                    btnConnect.style.background = "#88ff88";
-                    btnConnect.style.boxShadow = "0 0 15px #88ff88";
-                    console.log("Sphero aktywne!");
-                }
-            } catch (error) {
-                console.error("Błąd połączenia Bluetooth:", error);
-                btnConnect.innerText = "❌ BŁĄD. SPRÓBUJ PONOWNIE";
-                btnConnect.style.background = "#ff8888";
+            // Obsługa błędu ruchu głowy
+            if (isHeadMoving) {
+                warningOverlay.style.display = 'flex';
+                document.body.style.cursor = 'default'; // Pokazujemy kursor, aby rodzic mógł kliknąć menu/rekalibrację
+                requestAnimationFrame(gameLoop);
+                return;
             }
+
+            if (gameMode === 'rocket') {
+                rocket.x += rocket.speed * rocket.direction;
+                if (rocket.x > canvas.width * 0.9 || rocket.x < canvas.width * 0.05) {
+                    rocket.direction *= -1;
+                }
+                rocket.y = canvas.height / 2 + Math.sin(rocket.x * 0.01) * 30;
+
+                ctx.beginPath();
+                ctx.arc(rocket.x, rocket.y, 15, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff3366';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ff3366';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+            } else if (gameMode === 'bug') {
+                ctx.beginPath();
+                ctx.lineWidth = 35;
+                ctx.strokeStyle = '#101030';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                for (let i = 0; i < mazePoints.length; i++) {
+                    if (i === 0) ctx.moveTo(mazePoints[i].x, mazePoints[i].y);
+                    else ctx.lineTo(mazePoints[i].x, mazePoints[i].y);
+                }
+                ctx.stroke();
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#005588';
+                ctx.stroke();
+
+                let currentPointIndex = Math.floor(bug.progress * (mazePoints.length - 1));
+                let bugPos = mazePoints[currentPointIndex];
+
+                let distanceToFlashlight = Math.hypot(currentX - bugPos.x, currentY - bugPos.y);
+                
+                if (distanceToFlashlight < 60) {
+                    bug.progress += bug.speed;
+                    bug.isLit = true;
+                    if (bug.progress >= 1.0) {
+                        bug.progress = 0; 
+                        hudText.innerText = "✨ Super! Labirynt ukończony! ✨";
+                        setTimeout(() => { hudText.innerText = "Oświetlaj robaczka, aby szedł!"; }, 2000);
+                    }
+                } else {
+                    bug.isLit = false;
+                }
+
+                ctx.beginPath();
+                ctx.arc(bugPos.x, bugPos.y, bug.size, 0, Math.PI * 2);
+                ctx.fillStyle = bug.isLit ? '#00ffcc' : '#005544';
+                ctx.shadowBlur = bug.isLit ? 15 : 0;
+                ctx.shadowColor = '#00ffcc';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(gameLoop);
         }
 
-        // Odczytywanie danych z żyroskopu Sphero
-        function handleSpheroSensors(event) {
-            if (isHeadMoving || isCelebrating) return; 
-
-            const value = event.target.value;
-            // Odczyt danych binarnego protokołu Sphero (kąty Pitch i Roll)
-            let pitch = value.getInt16(12, false); 
-            let roll = value.getInt16(14, false);  
-
-            // Martwa strefa (odrzucanie drobnych drżeń rąk)
-            if (Math.abs(roll) > 5) currentX += (roll * SENSITIVITY) / 100;
-            if (Math.abs(pitch) > 5) currentY -= (pitch * SENSITIVITY) / 100;
-
-            updateFlashlightPosition();
-        }
-
-        // --- 2. STEROWANIE AWARYJNE / TESTOWE (MYSZKA) ---
-        // Działa automatycznie, dopóki nie sparujesz kulki Sphero
         window.addEventListener('mousemove', (e) => {
-            if (spheroCharacteristic || isHeadMoving || isCelebrating) return; 
+            if (isHeadMoving || !isGameRunning) return;
             currentX = e.clientX;
             currentY = e.clientY;
-            updateFlashlightPosition();
         });
 
-        // --- 3. LOGIKA ROZGRYWKI I ANIMACJA CELEBRACJI ---
-        function moveTarget() {
-            const x = Math.random() * (window.innerWidth - 150) + 75;
-            const y = Math.random() * (window.innerHeight - 150) + 75;
-            
-            // Reset stylów rakiety przed kolejnym losem
-            target.style.transition = 'none'; 
-            target.style.transform = 'translate(-50%, -50%) scale(1)';
-            target.style.background = '#00ffcc';
-            target.style.boxShadow = '0 0 20px #00ffcc';
-            target.innerText = '🚀';
-            target.style.left = x + 'px';
-            target.style.top = y + 'px';
-            target.classList.remove('revealed');
-            
-            // Przywrócenie animacji przejść
-            setTimeout(() => {
-                target.style.transition = 'opacity 0.2s, transform 0.5s ease-out, background 0.3s';
-            }, 50);
-        }
-
-        function checkCollision(flashX, flashY) {
-            if (isCelebrating) return;
-
-            const targetRect = target.getBoundingClientRect();
-            const targetX = targetRect.left + targetRect.width / 2;
-            const targetY = targetRect.top + targetRect.height / 2;
-
-            const distance = Math.hypot(flashX - targetX, flashY - targetY);
-
-            // Wykrywanie poświaty (zbliżanie się)
-            if (distance < 120) {
-                target.classList.add('revealed');
-                
-                // Precyzyjne najechanie środkiem latarki (trafienie)
-                if (distance < 40) {
-                    triggerSuccessCelebration();
-                }
-            } else {
-                target.classList.remove('revealed');
-            }
-        }
-
-        function triggerSuccessCelebration() {
-            isCelebrating = true; // Zatrzymujemy grę, dajemy dziecku czas na reakcję
-            
-            // Faza 1: Rakieta rośnie, zmienia kolor na złoty i błyszczy
-            target.style.transform = 'translate(-50%, -50%) scale(2)';
-            target.style.background = '#ffcc00'; 
-            target.style.boxShadow = '0 0 40px #ffcc00';
-            target.innerText = '✨🚀✨'; 
-
-            // Faza 2: Po 1.2 sekundy rakieta "odlatuje" (kurczy się do zera)
-            setTimeout(() => {
-                target.style.transform = 'translate(-50%, -50%) scale(0)';
-                
-                // Faza 3: Naliczanie punktu i przemieszczenie rakiety
-                setTimeout(() => {
-                    score++;
-                    scoreEl.innerText = score;
-                    
-                    moveTarget();
-                    isCelebrating = false; // Powrót do gry
-                }, 300); 
-
-            }, 1200); // Czas trwania złotej celebracji (1200 ms)
-        }
-
-        // Losowanie pierwszej pozycji na starcie
-        moveTarget();
-
-        // --- 4. DETEKCJA RUCHU GŁOWY (MEDIAPIPE FACE MESH) ---
-        const faceMesh = new FaceMesh({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-        });
-
-        faceMesh.setOptions({
-            maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5
-        });
-
+        // --- MEDIAPIPE FACE MESH ---
+        const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                const landmarks = results.multiFaceLandmarks[0];
-                const noseX = landmarks[4].x; // Punkt czubka nosa
-
-                if (baseHeadX === null) baseHeadX = noseX; // Kalibracja pozycji startowej
-                const deviation = Math.abs(noseX - baseHeadX);
-
-                // Próg tolerancji dla ruchu głowy
-                if (deviation > 0.025) {
+                const noseX = results.multiFaceLandmarks[0][4].x;
+                lastNoseX = noseX; // Stale zapisujemy pozycję na wypadek żądania rekalibracji
+                
+                if (baseHeadX === null) {
+                    baseHeadX = noseX;
+                }
+                
+                // Sprawdzenie odchylenia od pozycji bazowej (czułość)
+                if (Math.abs(noseX - baseHeadX) > 0.022) {
                     isHeadMoving = true;
-                    warningOverlay.style.display = 'flex';
                 } else {
-                    isHeadMoving = false;
-                    warningOverlay.style.display = 'none';
+                    // System automatycznie zdejmie blokadę, jeśli dziecko samo wróci do pierwotnej pozycji
+                    if(warningOverlay.style.display === 'flex' && Math.abs(noseX - baseHeadX) <= 0.022) {
+                        isHeadMoving = false;
+                        warningOverlay.style.display = 'none';
+                        document.body.style.cursor = 'none';
+                    }
                 }
             }
         });
 
-        // Uruchomienie kamery internetowej
         const camera = new Camera(videoElement, {
             onFrame: async () => { await faceMesh.send({ image: videoElement }); },
             width: 640, height: 480
