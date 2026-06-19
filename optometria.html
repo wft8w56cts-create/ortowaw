@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - 3 Tryby</title>
+    <title>Trening Optometryczny - 3 Tryby v2</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -152,7 +152,7 @@
         }
 
         // --- STRUKTURY OBIEKTÓW ---
-        let rocket = { x: 0, y: 0, speed: 3, direction: 1, isLit: false, pulse: 0 };
+        let rocketMode1 = { x: 0, y: 0, speed: 3.5, direction: 1, isLit: false, pulse: 0 };
         let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
         let mazePoints = [];
 
@@ -226,8 +226,8 @@
             document.body.style.cursor = 'none';
 
             if (gameMode === 'rocket') {
-                rocket.x = canvas.width * 0.1;
-                rocket.y = canvas.height / 2;
+                rocketMode1.x = canvas.width * 0.1;
+                rocketMode1.y = canvas.height / 2;
                 hudText.innerText = "Tryb 1: Śledź i rozświetlaj lecącą rakietę!";
             } else if (gameMode === 'bug') {
                 generateMaze(mazeType);
@@ -235,6 +235,7 @@
                 hudText.innerText = "Tryb 2: Oświetlaj robaczka, aby szedł do wyjścia!";
             } else if (gameMode === 'classic') {
                 classicRocket.score = 0;
+                particles = [];
                 spawnClassicRocket();
                 hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
             }
@@ -278,46 +279,43 @@
                 return;
             }
 
-            // --- TRYB 1: GONIĄCA RAKIETA (Z FEEDBACKIEM) ---
+            // --- TRYB 1: GONIĄCA RAKIETA ---
             if (gameMode === 'rocket') {
-                rocket.x += rocket.speed * rocket.direction;
-                if (rocket.x > canvas.width * 0.9 || rocket.x < canvas.width * 0.05) {
-                    rocket.direction *= -1;
+                rocketMode1.x += rocketMode1.speed * rocketMode1.direction;
+                if (rocketMode1.x > canvas.width * 0.9 || rocketMode1.x < canvas.width * 0.05) {
+                    rocketMode1.direction *= -1;
                 }
-                rocket.y = canvas.height / 2 + Math.sin(rocket.x * 0.01) * 40;
+                rocketMode1.y = canvas.height / 2 + Math.sin(rocketMode1.x * 0.01) * 40;
 
                 // Detekcja trafienia latarką
-                let dist = Math.hypot(currentX - rocket.x, currentY - rocket.y);
+                let dist = Math.hypot(currentX - rocketMode1.x, currentY - rocketMode1.y);
                 if (dist < 75) {
-                    rocket.isLit = true;
-                    rocket.pulse += 0.15;
+                    rocketMode1.isLit = true;
+                    rocketMode1.pulse += 0.15;
                     
-                    // FEEDBACK DŹWIĘKOWY (Pulsowanie dźwięku co 120ms podczas poprawnego śledzenia)
                     let now = performance.now();
                     if (now - lastSoundTime > 120) {
-                        playBeep(440 + Math.sin(rocket.pulse)*40, 0.08, "triangle");
+                        playBeep(440 + Math.sin(rocketMode1.pulse)*40, 0.08, "triangle");
                         lastSoundTime = now;
                     }
                 } else {
-                    rocket.isLit = false;
+                    rocketMode1.isLit = false;
                 }
 
-                // Wizualny Feedback (Efekt rozświetlenia i aury)
-                if (rocket.isLit) {
+                if (rocketMode1.isLit) {
                     ctx.beginPath();
-                    ctx.arc(rocket.x, rocket.y, 25 + Math.sin(rocket.pulse) * 6, 0, Math.PI * 2);
+                    ctx.arc(rocketMode1.x, rocketMode1.y, 25 + Math.sin(rocketMode1.pulse) * 6, 0, Math.PI * 2);
                     ctx.fillStyle = 'rgba(0, 255, 204, 0.3)';
                     ctx.shadowBlur = 25;
                     ctx.shadowColor = '#00ffcc';
                     ctx.fill();
                 }
 
-                // Rysowanie rdzenia rakiety
                 ctx.beginPath();
-                ctx.arc(rocket.x, rocket.y, 15, 0, Math.PI * 2);
-                ctx.fillStyle = rocket.isLit ? '#00ffcc' : '#ff3366';
-                ctx.shadowBlur = rocket.isLit ? 20 : 5;
-                ctx.shadowColor = rocket.isLit ? '#00ffcc' : '#ff3366';
+                ctx.arc(rocketMode1.x, rocketMode1.y, 15, 0, Math.PI * 2);
+                ctx.fillStyle = rocketMode1.isLit ? '#00ffcc' : '#ff3366';
+                ctx.shadowBlur = rocketMode1.isLit ? 20 : 5;
+                ctx.shadowColor = rocketMode1.isLit ? '#00ffcc' : '#ff3366';
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
@@ -361,21 +359,18 @@
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
-            // --- TRYB 3: PIERWOTNA RAKIETA (FIKSACJA + WYBUCH) ---
+            // --- TRYB 3: PIERWOTNA RAKIETA ---
             } else if (gameMode === 'classic') {
-                // Ruch rakiety klasycznej (odbijanie od niewidzialnych ścian)
                 classicRocket.x += classicRocket.vx;
                 classicRocket.y += classicRocket.vy;
 
                 if(classicRocket.x < canvas.width*0.1 || classicRocket.x > canvas.width*0.9) classicRocket.vx *= -1;
                 if(classicRocket.y < canvas.height*0.1 || classicRocket.y > canvas.height*0.9) classicRocket.vy *= -1;
 
-                // Liczenie czasu fiksacji (czy latarka na niej stoi)
                 let dist = Math.hypot(currentX - classicRocket.x, currentY - classicRocket.y);
                 if (dist < 65) {
-                    classicRocket.lockTime += 16.6; // Dodaj czas klatki (~60fps)
+                    classicRocket.lockTime += 16.6; 
                     
-                    // Efekt ładowania wybuchu wokół rakiety
                     ctx.beginPath();
                     ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size + 10, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
                     ctx.lineWidth = 4;
@@ -384,19 +379,17 @@
 
                     if(performance.now() % 300 < 20) playBeep(300 + (classicRocket.lockTime/5), 0.04);
 
-                    // WYBUCH po 1.5 sekundy (1500ms) nieprzerwanej fiksacji
                     if (classicRocket.lockTime >= 1500) {
                         createExplosion(classicRocket.x, classicRocket.y);
-                        playBeep(180, 0.4, "sawtooth"); // dźwięk wybuchu
+                        playBeep(180, 0.4, "sawtooth"); 
                         classicRocket.score++;
                         hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
                         spawnClassicRocket();
                     }
                 } else {
-                    classicRocket.lockTime = Math.max(0, classicRocket.lockTime - 10); // Spadek paska jeśli zjedzie wzrokiem
+                    classicRocket.lockTime = Math.max(0, classicRocket.lockTime - 12); 
                 }
 
-                // Rysowanie pierwotnej rakiety
                 ctx.beginPath();
                 ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size, 0, Math.PI * 2);
                 ctx.fillStyle = '#ff3366';
@@ -405,7 +398,6 @@
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
-                // Aktualizacja i rysowanie cząsteczek wybuchu
                 for(let i = particles.length - 1; i >= 0; i--) {
                     let p = particles[i];
                     p.x += p.vx; p.y += p.vy;
