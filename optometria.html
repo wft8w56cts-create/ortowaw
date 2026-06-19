@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - 3 Tryby v2</title>
+    <title>Trening Optometryczny - 4 Tryby</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -76,7 +76,8 @@
             <select id="game-mode-select" onchange="toggleMazeOptions()">
                 <option value="rocket">Tryb 1: Goniąca Rakieta (Płynny ruch)</option>
                 <option value="bug">Tryb 2: Robaczek w labiryncie</option>
-                <option value="classic">Tryb 3: Pierwotna Rakieta (Fiksacja + Wybuch)</option>
+                <option value="classic">Tryb 3: Pierwotna Rakieta (Ruch + Wybuch)</option>
+                <option value="static">Tryb 4: Nieruchoma Rakieta (Fiksacja)</option>
             </select>
         </div>
 
@@ -133,7 +134,7 @@
         let baseHeadX = null;
         let lastNoseX = null;
 
-        // Generator dźwięków terapeutycznych (Web Audio API)
+        // Generator dźwięków (Web Audio API)
         let audioCtx = null;
         function playBeep(freq, duration, type="sine") {
             try {
@@ -156,8 +157,9 @@
         let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
         let mazePoints = [];
 
-        // Tryb 3: Pierwotna Rakieta
+        // Tryb 3 i 4: Rakiety z fiksacją czasową i wybuchem
         let classicRocket = { x: 0, y: 0, vx: 2, vy: 1, size: 20, lockTime: 0, score: 0 };
+        let staticRocket = { x: 0, y: 0, size: 22, lockTime: 0, score: 0 };
         let particles = [];
 
         function resizeCanvas() {
@@ -205,6 +207,12 @@
             classicRocket.lockTime = 0;
         }
 
+        function spawnStaticRocket() {
+            staticRocket.x = Math.random() * (canvas.width * 0.7) + (canvas.width * 0.15);
+            staticRocket.y = Math.random() * (canvas.height * 0.7) + (canvas.height * 0.15);
+            staticRocket.lockTime = 0;
+        }
+
         function createExplosion(x, y) {
             for(let i=0; i<25; i++) {
                 particles.push({
@@ -224,6 +232,7 @@
             menuScreen.style.display = 'none';
             gameContainer.style.display = 'block';
             document.body.style.cursor = 'none';
+            particles = [];
 
             if (gameMode === 'rocket') {
                 rocketMode1.x = canvas.width * 0.1;
@@ -235,9 +244,12 @@
                 hudText.innerText = "Tryb 2: Oświetlaj robaczka, aby szedł do wyjścia!";
             } else if (gameMode === 'classic') {
                 classicRocket.score = 0;
-                particles = [];
                 spawnClassicRocket();
                 hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
+            } else if (gameMode === 'static') {
+                staticRocket.score = 0;
+                spawnStaticRocket();
+                hudText.innerText = `Tryb 4: Znajdź i oświetl nieruchomą rakietę! Punkty: ${staticRocket.score}`;
             }
 
             isGameRunning = true;
@@ -287,7 +299,6 @@
                 }
                 rocketMode1.y = canvas.height / 2 + Math.sin(rocketMode1.x * 0.01) * 40;
 
-                // Detekcja trafienia latarką
                 let dist = Math.hypot(currentX - rocketMode1.x, currentY - rocketMode1.y);
                 if (dist < 75) {
                     rocketMode1.isLit = true;
@@ -306,8 +317,7 @@
                     ctx.beginPath();
                     ctx.arc(rocketMode1.x, rocketMode1.y, 25 + Math.sin(rocketMode1.pulse) * 6, 0, Math.PI * 2);
                     ctx.fillStyle = 'rgba(0, 255, 204, 0.3)';
-                    ctx.shadowBlur = 25;
-                    ctx.shadowColor = '#00ffcc';
+                    ctx.shadowBlur = 25; ctx.shadowColor = '#00ffcc';
                     ctx.fill();
                 }
 
@@ -354,12 +364,11 @@
                 ctx.beginPath();
                 ctx.arc(bugPos.x, bugPos.y, bug.size, 0, Math.PI * 2);
                 ctx.fillStyle = bug.isLit ? '#00ffcc' : '#005544';
-                ctx.shadowBlur = bug.isLit ? 15 : 0;
-                ctx.shadowColor = '#00ffcc';
+                ctx.shadowBlur = bug.isLit ? 15 : 0; ctx.shadowColor = '#00ffcc';
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
-            // --- TRYB 3: PIERWOTNA RAKIETA ---
+            // --- TRYB 3: PIERWOTNA RAKIETA (W RUCHU) ---
             } else if (gameMode === 'classic') {
                 classicRocket.x += classicRocket.vx;
                 classicRocket.y += classicRocket.vy;
@@ -373,9 +382,7 @@
                     
                     ctx.beginPath();
                     ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size + 10, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
-                    ctx.lineWidth = 4;
-                    ctx.strokeStyle = '#ffcc00';
-                    ctx.stroke();
+                    ctx.lineWidth = 4; ctx.strokeStyle = '#ffcc00'; ctx.stroke();
 
                     if(performance.now() % 300 < 20) playBeep(300 + (classicRocket.lockTime/5), 0.04);
 
@@ -393,11 +400,44 @@
                 ctx.beginPath();
                 ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size, 0, Math.PI * 2);
                 ctx.fillStyle = '#ff3366';
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = '#ff3366';
+                ctx.shadowBlur = 20; ctx.shadowColor = '#ff3366';
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
+            // --- TRYB 4: NIERUCHOMA RAKIETA (FIKSACJA KLASYCZNA) ---
+            } else if (gameMode === 'static') {
+                let dist = Math.hypot(currentX - staticRocket.x, currentY - staticRocket.y);
+                if (dist < 65) {
+                    staticRocket.lockTime += 16.6;
+                    
+                    // Ładowanie okręgu wokół nieruchomej rakiety
+                    ctx.beginPath();
+                    ctx.arc(staticRocket.x, staticRocket.y, staticRocket.size + 10, 0, (Math.PI * 2) * (staticRocket.lockTime / 1500));
+                    ctx.lineWidth = 4; ctx.strokeStyle = '#00ffcc'; ctx.stroke();
+
+                    if(performance.now() % 300 < 20) playBeep(350 + (staticRocket.lockTime/4), 0.04);
+
+                    if (staticRocket.lockTime >= 1500) {
+                        createExplosion(staticRocket.x, staticRocket.y);
+                        playBeep(220, 0.35, "sine");
+                        staticRocket.score++;
+                        hudText.innerText = `Tryb 4: Znajdź i oświetl nieruchomą rakietę! Punkty: ${staticRocket.score}`;
+                        spawnStaticRocket();
+                    }
+                } else {
+                    staticRocket.lockTime = Math.max(0, staticRocket.lockTime - 15);
+                }
+
+                ctx.beginPath();
+                ctx.arc(staticRocket.x, staticRocket.y, staticRocket.size, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff3366';
+                ctx.shadowBlur = 15; ctx.shadowColor = '#ff3366';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Rysowanie cząsteczek eksplozji (dla trybu 3 i 4)
+            if (gameMode === 'classic' || gameMode === 'static') {
                 for(let i = particles.length - 1; i >= 0; i--) {
                     let p = particles[i];
                     p.x += p.vx; p.y += p.vy;
@@ -455,4 +495,3 @@
     </script>
 </body>
 </html>
-
