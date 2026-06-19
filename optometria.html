@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Rakieta i Robaczek</title>
+    <title>Trening Optometryczny - 3 Tryby</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -15,7 +15,6 @@
             font-family: 'Segoe UI', Arial, sans-serif; cursor: none;
         }
 
-        /* Ekran wyboru trybu gry */
         #menu-screen {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background: #050514; display: flex; flex-direction: column;
@@ -35,9 +34,7 @@
         #btn-start { background: #ff3366; color: white; font-size: 1.5rem; margin-top: 20px; box-shadow: 0 0 20px #ff3366; }
         #btn-start:hover { background: #00ffcc; color: black; box-shadow: 0 0 20px #00ffcc; }
 
-        /* Kontener gry i elementy wizualne */
         #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
-        
         #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
         #flashlight {
@@ -47,14 +44,12 @@
             pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 5;
         }
 
-        /* HUD i Panele */
         #hud-panel { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 1000; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
         #btn-back { position: absolute; top: 20px; right: 20px; background: #333; color: white; width: auto; font-size: 0.9rem; padding: 8px 15px; z-index: 1000; }
         
         #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.3; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* Ekran ostrzeżenia o ruchu głowy z opcjami interaktywnymi */
         #warning-overlay { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(200, 0, 0, 0.9); color: white; flex-direction: column;
@@ -77,15 +72,16 @@
         <p style="color: #878787; margin-bottom: 35px;">Zezwól na dostęp do kamery i wybierz ćwiczenie</p>
 
         <div class="setup-section">
-            <label style="font-weight: bold; color: #00ffcc;">1. WYBIERZ TRYB GRY:</label>
+            <label style="font-weight: bold; color: #00ffcc;">WYBIERZ TRYB GRY:</label>
             <select id="game-mode-select" onchange="toggleMazeOptions()">
-                <option value="rocket">Tryb 1: Goniąca Rakieta</option>
+                <option value="rocket">Tryb 1: Goniąca Rakieta (Płynny ruch)</option>
                 <option value="bug">Tryb 2: Robaczek w labiryncie</option>
+                <option value="classic">Tryb 3: Pierwotna Rakieta (Fiksacja + Wybuch)</option>
             </select>
         </div>
 
         <div class="setup-section" id="maze-config" style="display: none;">
-            <label style="font-weight: bold; color: #ffcc00;">2. WYBIERZ WERSJĘ LABIRYNTU:</label>
+            <label style="font-weight: bold; color: #ffcc00;">WYBIERZ WERSJĘ LABIRYNTU:</label>
             <select id="maze-type-select">
                 <option value="1">Labirynt 1: Prosta Fala</option>
                 <option value="2">Labirynt 2: Średnia Pętla</option>
@@ -100,7 +96,7 @@
 
     <div id="game-container">
         <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
-        <div id="hud-panel">Zadanie: <span id="hud-text">Uruchamianie...</span></div>
+        <div id="hud-panel"><span id="hud-text">Uruchamianie...</span></div>
         <canvas id="game-canvas"></canvas>
         <div id="flashlight"></div>
         
@@ -130,14 +126,39 @@
         let mazeType = '1';
         let isGameRunning = false;
 
-        // Sterowanie latarką
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
 
-        // Parametry biologiczne i śledzenie twarzy
         let isHeadMoving = false;
         let baseHeadX = null;
-        let lastNoseX = null; // Przechowuje ostatnią odczytaną pozycję, aby móc ją przypisać przy rekalibracji
+        let lastNoseX = null;
+
+        // Generator dźwięków terapeutycznych (Web Audio API)
+        let audioCtx = null;
+        function playBeep(freq, duration, type="sine") {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // --- STRUKTURY OBIEKTÓW ---
+        let rocket = { x: 0, y: 0, speed: 3, direction: 1, isLit: false, pulse: 0 };
+        let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
+        let mazePoints = [];
+
+        // Tryb 3: Pierwotna Rakieta
+        let classicRocket = { x: 0, y: 0, vx: 2, vy: 1, size: 20, lockTime: 0, score: 0 };
+        let particles = [];
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -153,9 +174,7 @@
 
         function generateMaze(type) {
             mazePoints = [];
-            const w = canvas.width;
-            const h = canvas.height;
-            
+            const w = canvas.width; const h = canvas.height;
             if (type === '1') { 
                 for (let x = w * 0.1; x <= w * 0.9; x += 5) {
                     let y = h / 2 + Math.sin(x * 0.008) * (h * 0.15);
@@ -168,16 +187,33 @@
                     mazePoints.push({ x, y });
                 }
             } else { 
-                let centerX = w / 2;
-                let centerY = h / 2;
+                let centerX = w / 2; let centerY = h / 2;
                 for (let angle = 0; angle < Math.PI * 6; angle += 0.02) {
                     let radius = (angle * 22) + 40;
                     let x = centerX + Math.cos(angle) * radius;
                     let y = centerY + Math.sin(angle) * radius;
-                    if(x > w*0.05 && x < w*0.95 && y > h*0.05 && y < h*0.95) {
-                        mazePoints.push({ x, y });
-                    }
+                    if(x > w*0.05 && x < w*0.95 && y > h*0.05 && y < h*0.95) mazePoints.push({ x, y });
                 }
+            }
+        }
+
+        function spawnClassicRocket() {
+            classicRocket.x = Math.random() * (canvas.width * 0.6) + (canvas.width * 0.2);
+            classicRocket.y = Math.random() * (canvas.height * 0.6) + (canvas.height * 0.2);
+            classicRocket.vx = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 2 + 1.5);
+            classicRocket.vy = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 1.5 + 1);
+            classicRocket.lockTime = 0;
+        }
+
+        function createExplosion(x, y) {
+            for(let i=0; i<25; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    alpha: 1,
+                    color: `hsl(${Math.random() * 60 + 340}, 100%, 60%)`
+                });
             }
         }
 
@@ -192,11 +228,15 @@
             if (gameMode === 'rocket') {
                 rocket.x = canvas.width * 0.1;
                 rocket.y = canvas.height / 2;
-                hudText.innerText = "Śledź latarką lecącą rakietę!";
-            } else {
+                hudText.innerText = "Tryb 1: Śledź i rozświetlaj lecącą rakietę!";
+            } else if (gameMode === 'bug') {
                 generateMaze(mazeType);
                 bug.progress = 0;
-                hudText.innerText = "Oświetlaj robaczka, aby szedł do wyjścia!";
+                hudText.innerText = "Tryb 2: Oświetlaj robaczka, aby szedł do wyjścia!";
+            } else if (gameMode === 'classic') {
+                classicRocket.score = 0;
+                spawnClassicRocket();
+                hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
             }
 
             isGameRunning = true;
@@ -212,68 +252,87 @@
             document.body.style.cursor = 'default';
         }
 
-        // Funkcja wymuszająca rekalibrację środka pozycji głowy
         function recalibrateHead() {
             if (lastNoseX !== null) {
-                baseHeadX = lastNoseX; // Nadpisujemy pozycję bazową obecną pozycją dziecka
+                baseHeadX = lastNoseX;
                 isHeadMoving = false;
                 warningOverlay.style.display = 'none';
-                document.body.style.cursor = 'none'; // Ponownie ukrywamy kursor dla gry
+                document.body.style.cursor = 'none';
             }
         }
 
-        // Zmienne obiektów gry
-        let rocket = { x: 0, y: 0, speed: 2.5, direction: 1 };
-        let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
-        let mazePoints = [];
+        let lastSoundTime = 0;
 
         function gameLoop() {
             if (!isGameRunning) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Aktualizacja pozycji latarki na ekranie
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            // Obsługa błędu ruchu głowy
             if (isHeadMoving) {
                 warningOverlay.style.display = 'flex';
-                document.body.style.cursor = 'default'; // Pokazujemy kursor, aby rodzic mógł kliknąć menu/rekalibrację
+                document.body.style.cursor = 'default';
                 requestAnimationFrame(gameLoop);
                 return;
             }
 
+            // --- TRYB 1: GONIĄCA RAKIETA (Z FEEDBACKIEM) ---
             if (gameMode === 'rocket') {
                 rocket.x += rocket.speed * rocket.direction;
                 if (rocket.x > canvas.width * 0.9 || rocket.x < canvas.width * 0.05) {
                     rocket.direction *= -1;
                 }
-                rocket.y = canvas.height / 2 + Math.sin(rocket.x * 0.01) * 30;
+                rocket.y = canvas.height / 2 + Math.sin(rocket.x * 0.01) * 40;
 
+                // Detekcja trafienia latarką
+                let dist = Math.hypot(currentX - rocket.x, currentY - rocket.y);
+                if (dist < 75) {
+                    rocket.isLit = true;
+                    rocket.pulse += 0.15;
+                    
+                    // FEEDBACK DŹWIĘKOWY (Pulsowanie dźwięku co 120ms podczas poprawnego śledzenia)
+                    let now = performance.now();
+                    if (now - lastSoundTime > 120) {
+                        playBeep(440 + Math.sin(rocket.pulse)*40, 0.08, "triangle");
+                        lastSoundTime = now;
+                    }
+                } else {
+                    rocket.isLit = false;
+                }
+
+                // Wizualny Feedback (Efekt rozświetlenia i aury)
+                if (rocket.isLit) {
+                    ctx.beginPath();
+                    ctx.arc(rocket.x, rocket.y, 25 + Math.sin(rocket.pulse) * 6, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(0, 255, 204, 0.3)';
+                    ctx.shadowBlur = 25;
+                    ctx.shadowColor = '#00ffcc';
+                    ctx.fill();
+                }
+
+                // Rysowanie rdzenia rakiety
                 ctx.beginPath();
                 ctx.arc(rocket.x, rocket.y, 15, 0, Math.PI * 2);
-                ctx.fillStyle = '#ff3366';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#ff3366';
+                ctx.fillStyle = rocket.isLit ? '#00ffcc' : '#ff3366';
+                ctx.shadowBlur = rocket.isLit ? 20 : 5;
+                ctx.shadowColor = rocket.isLit ? '#00ffcc' : '#ff3366';
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
+            // --- TRYB 2: ROBACZEK ---
             } else if (gameMode === 'bug') {
                 ctx.beginPath();
-                ctx.lineWidth = 35;
-                ctx.strokeStyle = '#101030';
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
+                ctx.lineWidth = 35; ctx.strokeStyle = '#101030';
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                 for (let i = 0; i < mazePoints.length; i++) {
                     if (i === 0) ctx.moveTo(mazePoints[i].x, mazePoints[i].y);
                     else ctx.lineTo(mazePoints[i].x, mazePoints[i].y);
                 }
                 ctx.stroke();
 
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#005588';
-                ctx.stroke();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#005588'; ctx.stroke();
 
                 let currentPointIndex = Math.floor(bug.progress * (mazePoints.length - 1));
                 let bugPos = mazePoints[currentPointIndex];
@@ -282,9 +341,11 @@
                 
                 if (distanceToFlashlight < 60) {
                     bug.progress += bug.speed;
+                    if(!bug.isLit) playBeep(500, 0.05);
                     bug.isLit = true;
                     if (bug.progress >= 1.0) {
                         bug.progress = 0; 
+                        playBeep(600, 0.3); playBeep(800, 0.4);
                         hudText.innerText = "✨ Super! Labirynt ukończony! ✨";
                         setTimeout(() => { hudText.innerText = "Oświetlaj robaczka, aby szedł!"; }, 2000);
                     }
@@ -299,6 +360,67 @@
                 ctx.shadowColor = '#00ffcc';
                 ctx.fill();
                 ctx.shadowBlur = 0;
+
+            // --- TRYB 3: PIERWOTNA RAKIETA (FIKSACJA + WYBUCH) ---
+            } else if (gameMode === 'classic') {
+                // Ruch rakiety klasycznej (odbijanie od niewidzialnych ścian)
+                classicRocket.x += classicRocket.vx;
+                classicRocket.y += classicRocket.vy;
+
+                if(classicRocket.x < canvas.width*0.1 || classicRocket.x > canvas.width*0.9) classicRocket.vx *= -1;
+                if(classicRocket.y < canvas.height*0.1 || classicRocket.y > canvas.height*0.9) classicRocket.vy *= -1;
+
+                // Liczenie czasu fiksacji (czy latarka na niej stoi)
+                let dist = Math.hypot(currentX - classicRocket.x, currentY - classicRocket.y);
+                if (dist < 65) {
+                    classicRocket.lockTime += 16.6; // Dodaj czas klatki (~60fps)
+                    
+                    // Efekt ładowania wybuchu wokół rakiety
+                    ctx.beginPath();
+                    ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size + 10, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#ffcc00';
+                    ctx.stroke();
+
+                    if(performance.now() % 300 < 20) playBeep(300 + (classicRocket.lockTime/5), 0.04);
+
+                    // WYBUCH po 1.5 sekundy (1500ms) nieprzerwanej fiksacji
+                    if (classicRocket.lockTime >= 1500) {
+                        createExplosion(classicRocket.x, classicRocket.y);
+                        playBeep(180, 0.4, "sawtooth"); // dźwięk wybuchu
+                        classicRocket.score++;
+                        hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
+                        spawnClassicRocket();
+                    }
+                } else {
+                    classicRocket.lockTime = Math.max(0, classicRocket.lockTime - 10); // Spadek paska jeśli zjedzie wzrokiem
+                }
+
+                // Rysowanie pierwotnej rakiety
+                ctx.beginPath();
+                ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff3366';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ff3366';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Aktualizacja i rysowanie cząsteczek wybuchu
+                for(let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.x += p.vx; p.y += p.vy;
+                    p.alpha -= 0.02;
+                    if(p.alpha <= 0) {
+                        particles.splice(i, 1);
+                    } else {
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = p.color;
+                        ctx.globalAlpha = p.alpha;
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
             }
 
             requestAnimationFrame(gameLoop);
@@ -317,17 +439,13 @@
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const noseX = results.multiFaceLandmarks[0][4].x;
-                lastNoseX = noseX; // Stale zapisujemy pozycję na wypadek żądania rekalibracji
+                lastNoseX = noseX;
                 
-                if (baseHeadX === null) {
-                    baseHeadX = noseX;
-                }
+                if (baseHeadX === null) baseHeadX = noseX;
                 
-                // Sprawdzenie odchylenia od pozycji bazowej (czułość)
                 if (Math.abs(noseX - baseHeadX) > 0.022) {
                     isHeadMoving = true;
                 } else {
-                    // System automatycznie zdejmie blokadę, jeśli dziecko samo wróci do pierwotnej pozycji
                     if(warningOverlay.style.display === 'flex' && Math.abs(noseX - baseHeadX) <= 0.022) {
                         isHeadMoving = false;
                         warningOverlay.style.display = 'none';
