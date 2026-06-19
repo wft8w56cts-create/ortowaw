@@ -1,11 +1,9 @@
-Opto waw 
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Zewnętrzny plik SVG</title>
+    <title>Trening Optometryczny - Rakieta i Robaczek</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -17,341 +15,312 @@ Opto waw
             font-family: 'Segoe UI', Arial, sans-serif; cursor: none;
         }
 
-        #game-container {
-            position: relative; width: 100vw; height: 100vh;
-            display: flex; justify-content: center; align-items: center;
-        }
-
-        #map-wrapper {
-            position: relative;
-            width: 65vh; 
-            height: 92vh; 
-            opacity: 1;
-        }
-
-        /* Automatyczne nadawanie stylów elementom wewnątrz pobranego SVG */
-        svg { width: 100%; height: 100%; pointer-events: none; }
-
-        svg path {
-            fill: #050515 !important;
-            stroke: #1a1a3a !important;
-            stroke-width: 2px !important;
-            transition: stroke 0.4s, stroke-width 0.4s, fill 0.4s;
-        }
-
-        svg path.active {
-            stroke: #00ffcc !important;
-            stroke-width: 6px !important;
-            filter: drop-shadow(0 0 12px #00ffcc);
-        }
-
-        svg path.completed {
-            stroke: #ffcc00 !important;
-            fill: rgba(255, 204, 0, 0.08) !important;
-        }
-
-        #Wielka_Wisła {
-            stroke: #102040 !important;
-            stroke-width: 5px !important;
-            fill: none !important;
-        }
-
-        #start-point {
-            position: absolute; width: 24px; height: 24px;
-            background: #ff3366; border-radius: 50%;
-            box-shadow: 0 0 15px #ff3366; transform: translate(-50%, -50%);
-            display: none; z-index: 10;
-        }
-
-        #flashlight {
-            position: absolute; width: 220px; height: 220px;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.6) 35%, rgba(255,255,255,0) 70%);
-            border-radius: 50%; transform: translate(-50%, -50%);
-            pointer-events: none; mix-blend-mode: screen;
-            box-shadow: 0 0 40px rgba(255,255,255,0.4);
-            left: 50%; top: 50%; z-index: 5;
-        }
-
-        #menu-panel { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 1000; }
-        #btn-connect { background: #00ffcc; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 0 15px #00ffcc; font-family: inherit; }
-        #hud { margin-top: 15px; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
-        #target-info { font-size: 1.3rem; color: #ffcc00; margin-top: 5px; font-weight: bold; }
-
-        #loading-screen {
+        /* Ekran wyboru trybu gry */
+        #menu-screen {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background: #050514; display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 9999; color: white;
+            cursor: default;
+        }
+        .setup-section {
+            background: rgba(255,255,255,0.05); padding: 25px; 
+            border-radius: 15px; margin: 15px; width: 350px; text-align: center;
+            border: 1px solid #1a1a3a;
+        }
+        select, button {
+            padding: 12px 20px; font-size: 1rem; font-weight: bold; border-radius: 25px;
+            border: none; margin-top: 10px; width: 100%; cursor: pointer; font-family: inherit;
+        }
+        select { background: #1a1a3a; color: white; border: 1px solid #333; }
+        #btn-start { background: #ff3366; color: white; font-size: 1.5rem; margin-top: 20px; box-shadow: 0 0 20px #ff3366; }
+        #btn-start:hover { background: #00ffcc; color: black; box-shadow: 0 0 20px #00ffcc; }
+
+        /* Kontener gry i elementy wizualne */
+        #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
+        
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        #flashlight {
+            position: absolute; width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 40%, rgba(255,255,255,0) 70%);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 5;
         }
 
-        #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.4; transform: scaleX(-1); }
+        /* HUD i Panele */
+        #hud-panel { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 1000; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
+        #btn-back { position: absolute; top: 20px; right: 20px; background: #333; color: white; width: auto; font-size: 0.9rem; padding: 8px 15px; z-index: 1000; }
+        
+        #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.3; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        #warning-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 0, 0, 0.6); color: white; justify-content: center; align-items: center; font-size: 3rem; font-weight: bold; z-index: 999; text-align: center; }
+        
+        /* Ekran ostrzeżenia o ruchu głowy */
+        #warning-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 0, 0, 0.7); color: white; justify-content: center; align-items: center; font-size: 3rem; font-weight: bold; z-index: 9999; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div id="loading-screen">
-        <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Zezwól na dostęp do kamery...</h1>
-        <p style="color: #878787; font-size: 1.2rem;">Trwa uruchamianie systemu śledzenia twarzy.</p>
+    <div id="menu-screen">
+        <h1 style="font-size: 2.5rem; margin-bottom: 5px; letter-spacing: 1px;">TRENING OPTOMETRYCZNY</h1>
+        <p style="color: #878787; margin-bottom: 35px;">Zezwól na dostęp do kamery i wybierz ćwiczenie</p>
+
+        <div class="setup-section">
+            <label style="font-weight: bold; color: #00ffcc;">1. WYBIERZ TRYB GRY:</label>
+            <select id="game-mode-select" onchange="toggleMazeOptions()">
+                <option value="rocket">Tryb 1: Goniąca Rakieta</option>
+                <option value="bug">Tryb 2: Robaczek w labiryncie</option>
+            </select>
+        </div>
+
+        <div class="setup-section" id="maze-config" style="display: none;">
+            <label style="font-weight: bold; color: #ffcc00;">2. WYBIERZ WERSJĘ LABIRYNTU:</label>
+            <select id="maze-type-select">
+                <option value="1">Labirynt 1: Prosta Fala</option>
+                <option value="2">Labirynt 2: Średnia Pętla</option>
+                <option value="3">Labirynt 3: Zakręcona Spirala</option>
+            </select>
+        </div>
+
+        <div style="width: 350px;">
+            <button id="btn-start" onclick="startGame()">URUCHOM ĆWICZENIE 🚀</button>
+        </div>
     </div>
 
     <div id="game-container">
-        <div id="menu-panel">
-            <button id="btn-connect" onclick="connectSphero()">🔗 POŁĄCZ SPHERO MINI</button>
-            <div id="hud">Dzielnica: <span id="level">1</span>/<span id="total-levels">0</span></div>
-            <div id="target-info">Wyszukiwanie dzielnic...</div>
-        </div>
-
-        <div id="map-wrapper">
-            <div id="start-point"></div>
-            </div>
-
+        <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
+        <div id="hud-panel">Zadanie: <span id="hud-text">Uruchamianie...</span></div>
+        <canvas id="game-canvas"></canvas>
         <div id="flashlight"></div>
-        <div id="warning-overlay">NIE RUSZAJ GŁOWĄ!<br><span style="font-size: 1.5rem;">Trzymaj pozycję pionową</span></div>
+        <div id="warning-overlay">NIE RUSZAJ GŁOWĄ!<br><span style="font-size: 1.5rem;">Trzymaj pozycję pionową, pracuj tylko oczami</span></div>
     </div>
 
     <div id="webcam-container"><video id="webcam" autoplay playsinline></video></div>
 
     <script>
+        const menuScreen = document.getElementById('menu-screen');
+        const gameContainer = document.getElementById('game-container');
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
         const flashlight = document.getElementById('flashlight');
-        const startPoint = document.getElementById('start-point');
-        const levelEl = document.getElementById('level');
         const warningOverlay = document.getElementById('warning-overlay');
         const videoElement = document.getElementById('webcam');
-        const btnConnect = document.getElementById('btn-connect');
-        const mapWrapper = document.getElementById('map-wrapper');
-        const targetInfo = document.getElementById('target-info');
-        const loadingScreen = document.getElementById('loading-screen');
+        const hudText = document.getElementById('hud-text');
 
-        let districts = [];
-        let currentLevel = 0;
-        let isHeadMoving = false;
-        let isCelebrating = false;
-        let baseHeadX = null;
-        let isSystemActive = false;
+        let gameMode = 'rocket';
+        let mazeType = '1';
+        let isGameRunning = false;
 
+        // Sterowanie latarką
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
-        const SENSITIVITY = 1.5;
 
-        let activePath = null;
-        let pointsToTrack = [];
-        let nextPointIndex = 0;
-        const svgWidth = 3178.56; 
+        // Parametry biologiczne i śledzenie twarzy
+        let isHeadMoving = false;
+        let baseHeadX = null;
 
-        // --- NAZWA TWOJEGO ZEWNĘTRZNEGO PLIKU ---
-        const EXTERNAL_SVG_URL = "mapa_warszawy.svg"; 
+        // Zmienne obiektów gry
+        let rocket = { x: 0, y: 0, angle: 0, speed: 2, direction: 1 };
+        let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
+        let mazePoints = [];
 
-        // Funkcja pobierająca plik SVG z dysku i wstrzykująca go do gry
-        async function loadExternalSVG() {
-            try {
-                const response = await fetch(EXTERNAL_SVG_URL);
-                if (!response.ok) throw new Error("Nie można załadować pliku SVG.");
-                
-                const svgText = await response.text();
-                
-                // Tworzymy tymczasowy element, aby wyciągnąć czysty węzeł <svg>
-                const parser = new DOMParser();
-                const svgDoc = parser.parseFromString(svgText, "image/svg+xml");
-                const svgElement = svgDoc.querySelector("svg");
-                
-                if (!svgElement) throw new Error("Plik nie zawiera poprawnego kodu SVG.");
-                
-                // Wymuszamy, by pobrany SVG miał odpowiednie ID dla skryptu
-                svgElement.setAttribute("id", "warsaw-svg");
-                
-                // Wstrzykujemy pobrany kod prosto do map-wrapper
-                mapWrapper.appendChild(svgElement);
-                
-                // Dopiero gdy plik fizycznie pojawił się na ekranie, skanujemy dzielnice
-                scanDistricts();
-            } catch (error) {
-                console.error(error);
-                targetInfo.innerText = "❌ BŁĄD: Brak pliku 'mapa_warszawy.svg' w folderze!";
-                targetInfo.style.color = "#ff3366";
-            }
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function toggleMazeOptions() {
+            const mode = document.getElementById('game-mode-select').value;
+            document.getElementById('maze-config').style.display = (mode === 'bug') ? 'block' : 'none';
         }
 
-       
-function scanDistricts() {
-    districts = [];
-    const allPaths = document.querySelectorAll('#warsaw-svg path');
-    
-    allPaths.forEach(path => {
-        const id = path.id;
-        // Ignorujemy tylko definicje systemowe i wielkie maski tła
-        if (id && !id.startsWith("clipPath") && id !== "path1" && id !== "path2" && id !== "path3" && id !== "path4") {
-            districts.push(path);
-        }
-    });
-
-    // Jeśli ścieżki nie mają ładnych nazw, nadajemy im nazwy robocze
-    districts.forEach((path, index) => {
-        if (!path.id || path.id.startsWith("path")) {
-            path.setAttribute("id", `Obszar_${index + 1}`);
-        }
-    });
-
-    if (districts.length === 0) {
-        targetInfo.innerText = "❌ Nie znaleziono dzielnic wewnątrz SVG!";
-        return;
-    }
-
-    document.getElementById('total-levels').innerText = districts.length;
-    isSystemActive = true;
-    initLevel(currentLevel);
-}
-
-
-        function initLevel(levelIndex) {
-            if(!isSystemActive || districts.length === 0) return;
+        // Generowanie punktów dla różnych ścieżek labiryntów
+        function generateMaze(type) {
+            mazePoints = [];
+            const w = canvas.width;
+            const h = canvas.height;
             
-            if(levelIndex >= districts.length) {
-                targetInfo.innerText = "🏆 Gratulacje! Cała Warszawa rozświetlona!";
-                startPoint.style.display = 'none';
-                return;
+            if (type === '1') { // Prosta Fala
+                for (let x = w * 0.1; x <= w * 0.9; x += 5) {
+                    let y = h / 2 + Math.sin(x * 0.008) * (h * 0.15);
+                    mazePoints.push({ x, y });
+                }
+            } else if (type === '2') { // Średnia Pętla (Kształt Ósemki / Infinity)
+                for (let t = 0; t < Math.PI * 2; t += 0.01) {
+                    let x = w / 2 + Math.sin(t) * (w * 0.35);
+                    let y = h / 2 + Math.sin(t * 2) * (h * 0.25);
+                    mazePoints.push({ x, y });
+                }
+            } else { // Zakręcona Spirala
+                let centerX = w / 2;
+                let centerY = h / 2;
+                for (let angle = 0; angle < Math.PI * 6; angle += 0.02) {
+                    let radius = (angle * 22) + 40;
+                    let x = centerX + Math.cos(angle) * radius;
+                    let y = centerY + Math.sin(angle) * radius;
+                    if(x > w*0.05 && x < w*0.95 && y > h*0.05 && y < h*0.95) {
+                        mazePoints.push({ x, y });
+                    }
+                }
             }
-
-            levelEl.innerText = levelIndex + 1;
-            activePath = districts[levelIndex];
-            activePath.classList.add('active');
-            
-            targetInfo.innerText = `Obrysuj granicę: ${activePath.id.replace(/_/g, ' ')}`;
-
-            pointsToTrack = [];
-            const pathLength = activePath.getTotalLength();
-            const sampleCount = 40; 
-
-            for (let i = 0; i <= sampleCount; i++) {
-                const ratio = i / sampleCount;
-                pointsToTrack.push(activePath.getPointAtLength(ratio * pathLength));
-            }
-
-            nextPointIndex = 0;
-            positionStartPoint();
         }
 
-        function positionStartPoint() {
-            if (!pointsToTrack.length) return;
-            const wrapperRect = mapWrapper.getBoundingClientRect();
-            const pt = pointsToTrack[nextPointIndex];
-            const scale = wrapperRect.width / svgWidth;
+        function startGame() {
+            gameMode = document.getElementById('game-mode-select').value;
+            mazeType = document.getElementById('maze-type-select').value;
 
-            startPoint.style.left = (pt.x * scale) + 'px';
-            startPoint.style.top = (pt.y * scale) + 'px';
-            startPoint.style.display = 'block';
+            menuScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+            document.body.style.cursor = 'none';
+
+            // Reset stanów obiektów
+            if (gameMode === 'rocket') {
+                rocket.x = canvas.width * 0.1;
+                rocket.y = canvas.height / 2;
+                hudText.innerText = "Śledź latarką lecącą rakietę!";
+            } else {
+                generateMaze(mazeType);
+                bug.progress = 0;
+                hudText.innerText = "Oświetlaj robaczka, aby szedł do wyjścia!";
+            }
+
+            isGameRunning = true;
+            requestAnimationFrame(gameLoop);
         }
 
-        function updateFlashlightPosition() {
-            currentX = Math.max(0, Math.min(window.innerWidth, currentX));
-            currentY = Math.max(0, Math.min(window.innerHeight, currentY));
+        function exitToMenu() {
+            isGameRunning = false;
+            gameContainer.style.display = 'none';
+            menuScreen.style.display = 'flex';
+            document.body.style.cursor = 'default';
+        }
+
+        // Główna pętla gry
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Aktualizacja pozycji latarki na ekranie
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            if (isSystemActive && !isCelebrating && !isHeadMoving) {
-                checkPathTracking(currentX, currentY);
+            // Sprawdzenie blokady ruchu głowy
+            if (isHeadMoving) {
+                warningOverlay.style.display = 'flex';
+                requestAnimationFrame(gameLoop);
+                return;
+            } else {
+                warningOverlay.style.display = 'none';
             }
-        }
 
-        function checkPathTracking(flashX, flashY) {
-            if (pointsToTrack.length === 0) return;
+            if (gameMode === 'rocket') {
+                // TRYB 1: Logika Rakiety (stały automatyczny ruch lewo-prawo)
+                rocket.x += rocket.speed * rocket.direction;
+                if (rocket.x > canvas.width * 0.9 || rocket.x < canvas.width * 0.05) {
+                    rocket.direction *= -1;
+                }
+                rocket.y = canvas.height / 2 + Math.sin(rocket.x * 0.01) * 30; // lekka fala góra-dół
 
-            const wrapperRect = mapWrapper.getBoundingClientRect();
-            const scale = wrapperRect.width / svgWidth;
+                // Rysowanie celu (Rakiety)
+                ctx.beginPath();
+                ctx.arc(rocket.x, rocket.y, 15, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff3366';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ff3366';
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset cienia
 
-            const targetPt = pointsToTrack[nextPointIndex];
-            const targetX = wrapperRect.left + (targetPt.x * scale);
-            const targetY = wrapperRect.top + (targetPt.y * scale);
+            } else if (gameMode === 'bug') {
+                // TRYB 2: Logika Robaczka w tunelu
+                
+                // Rysowanie ścian tunelu/labiryntu w tle
+                ctx.beginPath();
+                ctx.lineWidth = 35;
+                ctx.strokeStyle = '#101030';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                for (let i = 0; i < mazePoints.length; i++) {
+                    if (i === 0) ctx.moveTo(mazePoints[i].x, mazePoints[i].y);
+                    else ctx.lineTo(mazePoints[i].x, mazePoints[i].y);
+                }
+                ctx.stroke();
 
-            const distance = Math.hypot(flashX - targetX, flashY - targetY);
+                // Rdzeń ścieżki labiryntu (neonowa nitka środkowa)
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#005588';
+                ctx.stroke();
 
-            if (distance < 65) { 
-                nextPointIndex++;
-                if (nextPointIndex >= pointsToTrack.length) {
-                    triggerLevelComplete();
+                // Obliczanie aktualnej pozycji robaczka na podstawie postępu (0.0 do 1.0)
+                let currentPointIndex = Math.floor(bug.progress * (mazePoints.length - 1));
+                let bugPos = mazePoints[currentPointIndex];
+
+                // Sprawdzenie czy latarka oświetla robaczka (wymuszona fiksacja centralna)
+                let distanceToFlashlight = Math.hypot(currentX - bugPos.x, currentY - bugPos.y);
+                
+                if (distanceToFlashlight < 60) {
+                    // Robaczek idzie DO PRZODU tylko gdy jest oświetlony
+                    bug.progress += bug.speed;
+                    bug.isLit = true;
+                    if (bug.progress >= 1.0) {
+                        bug.progress = 0; // Sukces, powrót na start lub koniec poziomu
+                        hudText.innerText = "✨ Super! Labirynt ukończony! ✨";
+                        setTimeout(() => { hudText.innerText = "Oświetlaj robaczka, aby szedł!"; }, 2000);
+                    }
                 } else {
-                    positionStartPoint();
+                    // Po ciemku nie idzie i czeka w miejscu
+                    bug.isLit = false;
                 }
+
+                // Rysowanie robaczka
+                ctx.beginPath();
+                ctx.arc(bugPos.x, bugPos.y, bug.size, 0, Math.PI * 2);
+                // Robaczek świeci jasnym neonem na zielono gdy dostanie światło, w ciemności blednie
+                ctx.fillStyle = bug.isLit ? '#00ffcc' : '#005544';
+                ctx.shadowBlur = bug.isLit ? 15 : 0;
+                ctx.shadowColor = '#00ffcc';
+                ctx.fill();
+                ctx.shadowBlur = 0;
             }
+
+            requestAnimationFrame(gameLoop);
         }
 
-        function triggerLevelComplete() {
-            isCelebrating = true;
-            startPoint.style.display = 'none';
-            activePath.classList.remove('active');
-            activePath.classList.add('completed');
-            targetInfo.innerText = `✨ Doskonale! ${activePath.id.replace(/_/g, ' ')} zaliczony! ✨`;
-
-            setTimeout(() => {
-                currentLevel++;
-                initLevel(currentLevel);
-                isCelebrating = false;
-            }, 1500);
-        }
-
-        // --- BLUETOOTH CONTROL ---
-        let spheroCharacteristic = null;
-        async function connectSphero() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'SM-' }, { namePrefix: 'Sphero' }],
-                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-                const characteristics = await service.getCharacteristics();
-                const notifyChar = characteristics.find(c => c.properties.notify);
-                if (notifyChar) {
-                    await notifyChar.startNotifications();
-                    notifyChar.addEventListener('characteristicvaluechanged', (e) => {
-                        if (isHeadMoving || isCelebrating || !isSystemActive) return;
-                        const value = e.target.value;
-                        let pitch = value.getInt16(12, false);
-                        let roll = value.getInt16(14, false);
-                        if (Math.abs(roll) > 5) currentX += (roll * SENSITIVITY) / 100;
-                        if (Math.abs(pitch) > 5) currentY -= (pitch * SENSITIVITY) / 100;
-                        updateFlashlightPosition();
-                    });
-                    spheroCharacteristic = notifyChar;
-                    btnConnect.innerText = "🟢 POŁĄCZONO!";
-                }
-            } catch (error) { btnConnect.innerText = "❌ BŁĄD BT"; }
-        }
-
+        // Sterowanie myszą jako domyślny fallback / latarka
         window.addEventListener('mousemove', (e) => {
-            if (spheroCharacteristic || isHeadMoving || isCelebrating) return;
-            currentX = e.clientX; currentY = e.clientY;
-            updateFlashlightPosition();
+            if (isHeadMoving || !isGameRunning) return;
+            currentX = e.clientX;
+            currentY = e.clientY;
         });
-        window.addEventListener('resize', () => { if(isSystemActive) positionStartPoint(); });
 
-        // --- URUCHAMIANIE KAMERY I OBSŁUGA STARTU ---
+        // --- KONFIGURACJA ŚLEDZENIA TWARZY MEDIAPIPE ---
         const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
         faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         
         faceMesh.onResults((results) => {
-            if (loadingScreen.style.display !== 'none') {
-                loadingScreen.style.display = 'none';
-                loadExternalSVG(); // <--- Dynamiczne pobranie zewnętrznego pliku po starcie kamery
-            }
-
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                const noseX = results.multiFaceLandmarks[0][4].x;
-                if (baseHeadX === null) baseHeadX = noseX;
-                if (Math.abs(noseX - baseHeadX) > 0.025) {
-                    isHeadMoving = true; warningOverlay.style.display = 'flex';
+                const noseX = results.multiFaceLandmarks[0][4].x; // Współrzędna czubka nosa
+                
+                if (baseHeadX === null) {
+                    baseHeadX = noseX; // Zapamiętanie pozycji wyjściowej
+                }
+                
+                // Wykrywanie skrętu głowy (czułość)
+                if (Math.abs(noseX - baseHeadX) > 0.022) {
+                    isHeadMoving = true;
                 } else {
-                    isHeadMoving = false; warningOverlay.style.display = 'none';
+                    isHeadMoving = false;
                 }
             }
         });
 
-        const camera = new Camera(videoElement, { 
-            onFrame: async () => { await faceMesh.send({ image: videoElement }); }, 
-            width: 640, height: 480 
+        // Automatyczne uruchomienie kamery na starcie strony
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await faceMesh.send({ image: videoElement }); },
+            width: 640, height: 480
         });
         camera.start();
     </script>
 </body>
 </html>
-
