@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - 4 Tryby</title>
+    <title>Trening Optometryczny - 4 Tryby v3</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -134,7 +134,6 @@
         let baseHeadX = null;
         let lastNoseX = null;
 
-        // Generator dźwięków (Web Audio API)
         let audioCtx = null;
         function playBeep(freq, duration, type="sine") {
             try {
@@ -152,14 +151,72 @@
             } catch(e) {}
         }
 
+        // --- FUNKCJA RYSOWANIA RAKIETY ---
+        function drawVectorRocket(x, y, radius, angle, isLit, pulseValue = 0) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+
+            let scale = radius / 20;
+            ctx.scale(scale, scale);
+
+            // Ogień z silnika
+            if (!isGameRunning || Math.random() > 0.3) {
+                ctx.beginPath();
+                ctx.moveTo(-15, -5);
+                ctx.lineTo(-30 - (isLit ? Math.sin(pulseValue)*10 : Math.random()*8), 0);
+                ctx.lineTo(-15, 5);
+                ctx.fillStyle = isLit ? '#00ffcc' : '#ff9900';
+                ctx.fill();
+            }
+
+            // Skrzydła boczne
+            ctx.beginPath();
+            ctx.moveTo(-10, -5);
+            ctx.lineTo(-18, -15);
+            ctx.lineTo(-5, -5);
+            ctx.moveTo(-10, 5);
+            ctx.lineTo(-18, 15);
+            ctx.lineTo(-5, 5);
+            ctx.fillStyle = isLit ? '#00ccaa' : '#cc2255';
+            ctx.fill();
+
+            // Korpus główny
+            ctx.beginPath();
+            ctx.moveTo(-15, -7);
+            ctx.lineTo(5, -7);
+            ctx.quadraticCurveTo(20, 0, 25, 0); // dziób rakiety
+            ctx.quadraticCurveTo(20, 0, 5, 7);
+            ctx.lineTo(-15, 7);
+            ctx.closePath();
+            
+            ctx.fillStyle = isLit ? '#00ffcc' : '#ff3366';
+            if (isLit) {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#00ffcc';
+            } else {
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#ff3366';
+            }
+            ctx.fill();
+
+            // Okienko rakiety
+            ctx.beginPath();
+            ctx.arc(2, 0, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            ctx.restore();
+            ctx.shadowBlur = 0;
+        }
+
         // --- STRUKTURY OBIEKTÓW ---
-        let rocketMode1 = { x: 0, y: 0, speed: 3.5, direction: 1, isLit: false, pulse: 0 };
-        let bug = { progress: 0, speed: 0.002, size: 12, isLit: false };
+        let rocketMode1 = { x: 0, y: 0, radius: 22, speed: 3.5, direction: 1, isLit: false, pulse: 0, angle: 0 };
+        let bug = { progress: 0, speed: 0.002, size: 14, isLit: false };
         let mazePoints = [];
 
-        // Tryb 3 i 4: Rakiety z fiksacją czasową i wybuchem
-        let classicRocket = { x: 0, y: 0, vx: 2, vy: 1, size: 20, lockTime: 0, score: 0 };
-        let staticRocket = { x: 0, y: 0, size: 22, lockTime: 0, score: 0 };
+        let classicRocket = { x: 0, y: 0, vx: 2, vy: 1, radius: 25, lockTime: 0, score: 0, angle: 0 };
+        let staticRocket = { x: 0, y: 0, radius: 25, lockTime: 0, score: 0, angle: -Math.PI / 4 }; // pod kątem w górę
         let particles = [];
 
         function resizeCanvas() {
@@ -293,11 +350,17 @@
 
             // --- TRYB 1: GONIĄCA RAKIETA ---
             if (gameMode === 'rocket') {
+                let oldX = rocketMode1.x;
+                let oldY = rocketMode1.y;
+
                 rocketMode1.x += rocketMode1.speed * rocketMode1.direction;
                 if (rocketMode1.x > canvas.width * 0.9 || rocketMode1.x < canvas.width * 0.05) {
                     rocketMode1.direction *= -1;
                 }
                 rocketMode1.y = canvas.height / 2 + Math.sin(rocketMode1.x * 0.01) * 40;
+                
+                // Obliczanie realnego kąta obrotu rakiety w stronę ruchu
+                rocketMode1.angle = Math.atan2(rocketMode1.y - oldY, rocketMode1.x - oldX);
 
                 let dist = Math.hypot(currentX - rocketMode1.x, currentY - rocketMode1.y);
                 if (dist < 75) {
@@ -315,19 +378,12 @@
 
                 if (rocketMode1.isLit) {
                     ctx.beginPath();
-                    ctx.arc(rocketMode1.x, rocketMode1.y, 25 + Math.sin(rocketMode1.pulse) * 6, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(0, 255, 204, 0.3)';
-                    ctx.shadowBlur = 25; ctx.shadowColor = '#00ffcc';
+                    ctx.arc(rocketMode1.x, rocketMode1.y, 35 + Math.sin(rocketMode1.pulse) * 6, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(0, 255, 204, 0.2)';
                     ctx.fill();
                 }
 
-                ctx.beginPath();
-                ctx.arc(rocketMode1.x, rocketMode1.y, 15, 0, Math.PI * 2);
-                ctx.fillStyle = rocketMode1.isLit ? '#00ffcc' : '#ff3366';
-                ctx.shadowBlur = rocketMode1.isLit ? 20 : 5;
-                ctx.shadowColor = rocketMode1.isLit ? '#00ffcc' : '#ff3366';
-                ctx.fill();
-                ctx.shadowBlur = 0;
+                drawVectorRocket(rocketMode1.x, rocketMode1.y, rocketMode1.radius, rocketMode1.angle, rocketMode1.isLit, rocketMode1.pulse);
 
             // --- TRYB 2: ROBACZEK ---
             } else if (gameMode === 'bug') {
@@ -376,12 +432,16 @@
                 if(classicRocket.x < canvas.width*0.1 || classicRocket.x > canvas.width*0.9) classicRocket.vx *= -1;
                 if(classicRocket.y < canvas.height*0.1 || classicRocket.y > canvas.height*0.9) classicRocket.vy *= -1;
 
+                classicRocket.angle = Math.atan2(classicRocket.vy, classicRocket.vx);
+
                 let dist = Math.hypot(currentX - classicRocket.x, currentY - classicRocket.y);
-                if (dist < 65) {
+                let isLit = dist < 65;
+
+                if (isLit) {
                     classicRocket.lockTime += 16.6; 
                     
                     ctx.beginPath();
-                    ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size + 10, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
+                    ctx.arc(classicRocket.x, classicRocket.y, classicRocket.radius + 15, 0, (Math.PI * 2) * (classicRocket.lockTime / 1500));
                     ctx.lineWidth = 4; ctx.strokeStyle = '#ffcc00'; ctx.stroke();
 
                     if(performance.now() % 300 < 20) playBeep(300 + (classicRocket.lockTime/5), 0.04);
@@ -397,22 +457,18 @@
                     classicRocket.lockTime = Math.max(0, classicRocket.lockTime - 12); 
                 }
 
-                ctx.beginPath();
-                ctx.arc(classicRocket.x, classicRocket.y, classicRocket.size, 0, Math.PI * 2);
-                ctx.fillStyle = '#ff3366';
-                ctx.shadowBlur = 20; ctx.shadowColor = '#ff3366';
-                ctx.fill();
-                ctx.shadowBlur = 0;
+                drawVectorRocket(classicRocket.x, classicRocket.y, classicRocket.radius, classicRocket.angle, isLit, classicRocket.lockTime*0.02);
 
-            // --- TRYB 4: NIERUCHOMA RAKIETA (FIKSACJA KLASYCZNA) ---
+            // --- TRYB 4: NIERUCHOMA RAKIETA ---
             } else if (gameMode === 'static') {
                 let dist = Math.hypot(currentX - staticRocket.x, currentY - staticRocket.y);
-                if (dist < 65) {
+                let isLit = dist < 65;
+
+                if (isLit) {
                     staticRocket.lockTime += 16.6;
                     
-                    // Ładowanie okręgu wokół nieruchomej rakiety
                     ctx.beginPath();
-                    ctx.arc(staticRocket.x, staticRocket.y, staticRocket.size + 10, 0, (Math.PI * 2) * (staticRocket.lockTime / 1500));
+                    ctx.arc(staticRocket.x, staticRocket.y, staticRocket.radius + 15, 0, (Math.PI * 2) * (staticRocket.lockTime / 1500));
                     ctx.lineWidth = 4; ctx.strokeStyle = '#00ffcc'; ctx.stroke();
 
                     if(performance.now() % 300 < 20) playBeep(350 + (staticRocket.lockTime/4), 0.04);
@@ -428,12 +484,7 @@
                     staticRocket.lockTime = Math.max(0, staticRocket.lockTime - 15);
                 }
 
-                ctx.beginPath();
-                ctx.arc(staticRocket.x, staticRocket.y, staticRocket.size, 0, Math.PI * 2);
-                ctx.fillStyle = '#ff3366';
-                ctx.shadowBlur = 15; ctx.shadowColor = '#ff3366';
-                ctx.fill();
-                ctx.shadowBlur = 0;
+                drawVectorRocket(staticRocket.x, staticRocket.y, staticRocket.radius, staticRocket.angle, isLit, staticRocket.lockTime*0.02);
             }
 
             // Rysowanie cząsteczek eksplozji (dla trybu 3 i 4)
