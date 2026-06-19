@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Ścieżka A (Wskaźnik Graficzny)</title>
+    <title>Trening Optometryczny - Ścieżka A (Kalibracja)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -54,21 +54,33 @@
         #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.4; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* NOWOŚĆ: PANEL BIOFEEDBACKU GŁOWY (Płynny wskaźnik od czerwieni do zieleni) */
+        /* PANEL BIOFEEDBACKU GŁOWY Z PRZYCISKIEM KALIBRACJI */
         #posture-widget {
-            position: absolute; bottom: 30px; left: 30px; width: 240px; 
-            background: rgba(0, 0, 10, 0.7); padding: 15px; border-radius: 15px;
-            border: 1px solid #222; z-index: 1000; display: flex; flex-direction: column; align-items: center;
+            position: absolute; bottom: 30px; left: 30px; width: 320px; 
+            background: rgba(0, 0, 10, 0.85); padding: 15px; border-radius: 15px;
+            border: 1px solid #222; z-index: 1000; display: flex; flex-direction: row; 
+            align-items: center; justify-content: space-between; cursor: default;
         }
-        .widget-label { color: #888; font-size: 0.8rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px; }
+        .widget-main { flex-grow: 1; display: flex; flex-direction: column; align-items: center; margin-right: 15px; }
+        .widget-label { color: #888; font-size: 0.75rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px; }
         #head-icon { font-size: 1.8rem; margin-bottom: 5px; transition: transform 0.1s ease; }
-        .bar-container { position: relative; width: 100%; height: 8px; background: #111; border-radius: 4px; overflow: visible; }
-        .safety-zone { position: absolute; left: 35%; width: 30%; height: 100%; background: rgba(0, 255, 200, 0.2); border-left: 1px solid rgba(0,255,200,0.4); border-right: 1px solid rgba(0,255,200,0.4); }
+        .bar-container { position: relative; width: 100%; height: 8px; background: #111; border-radius: 4px; }
+        .safety-zone { position: absolute; left: 35%; width: 30%; height: 100%; background: rgba(0, 255, 200, 0.15); border-left: 1px solid rgba(0,255,200,0.3); border-right: 1px solid rgba(0,255,200,0.3); }
         #indicator-dot {
             position: absolute; top: -4px; left: 50%; width: 16px; height: 16px;
             background: #00ffcc; border-radius: 50%; transform: translateX(-50%);
-            box-shadow: 0 0 10px #00ffcc; transition: left 0.1s ease, background 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 10px #00ffcc; transition: left 0.1s ease, background 0.2s;
         }
+        /* STYLIZACJA PRZYCISKU KALIBRACJI */
+        #btn-calibrate {
+            background: #1a1a3a; color: #00ffcc; border: 1px solid #00ffcc;
+            width: 75px; height: 45px; font-size: 0.8rem; font-weight: bold;
+            border-radius: 10px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 4px;
+            transition: all 0.2s ease; margin-top: 0; box-shadow: 0 0 5px rgba(0, 255, 204, 0.2);
+        }
+        #btn-calibrate:hover { background: #00ffcc; color: black; box-shadow: 0 0 15px #00ffcc; }
+        #btn-calibrate span { font-size: 1rem; margin-bottom: 2px; }
     </style>
 </head>
 <body>
@@ -106,13 +118,18 @@
         <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
         <div id="hud-panel"><span id="hud-text">Uruchamianie...</span></div>
         
-        <div id="posture-widget">
-            <div class="widget-label">POZYCJA GŁOWY</div>
-            <div id="head-icon">👦</div>
-            <div class="bar-container">
-                <div class="safety-zone"></div>
-                <div id="indicator-dot"></div>
+        <div id="posture-widget" onmouseover="document.body.style.cursor='default'" onmouseout="if(isGameRunning) document.body.style.cursor='none'">
+            <div class="widget-main">
+                <div class="widget-label">POZYCJA GŁOWY</div>
+                <div id="head-icon">👦</div>
+                <div class="bar-container">
+                    <div class="safety-zone"></div>
+                    <div id="indicator-dot"></div>
+                </div>
             </div>
+            <button id="btn-calibrate" onclick="calibrateHeadPosition()" title="Resetuje pozycję środkową (Klawisz R)">
+                <span>🎯</span>Reset
+            </button>
         </div>
 
         <canvas id="game-canvas"></canvas>
@@ -131,7 +148,6 @@
         const hudText = document.getElementById('hud-text');
         const btnDownload = document.getElementById('btn-download');
         
-        // Elementy wskaźnika graficznego
         const indicatorDot = document.getElementById('indicator-dot');
         const headIcon = document.getElementById('head-icon');
 
@@ -142,10 +158,11 @@
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
 
-        // Wartości wychylenia głowy (0.5 to środek ekranu)
+        // Parametry śledzenia głowy
         let isHeadMoving = false;
         let baseHeadX = null;
-        let currentHeadDeviation = 0; // Odchył od środka: od -100 (lewo) do +100 (prawo)
+        let currentHeadDeviation = 0; 
+        let lastNoseX = null;
         const HEAD_TOLERANCE = 0.022;  
         
         let telemetryLog = [];
@@ -167,6 +184,14 @@
                 osc.start();
                 osc.stop(audioCtx.currentTime + duration);
             } catch(e) {}
+        }
+
+        // Funkcja kalibracji pozycji głowy
+        function calibrateHeadPosition() {
+            if (lastNoseX !== null) {
+                baseHeadX = lastNoseX;
+                playBeep(587.33, 0.15, "sine"); // Przyjemny dźwięk potwierdzający kalibrację (D5)
+            }
         }
 
         function drawVectorRocket(x, y, radius, angle, isLit, pulseValue = 0) {
@@ -300,19 +325,15 @@
         let lastSoundTime = 0;
 
         function updatePostureWidget() {
-            // Zamiana odchylenia matematycznego na pozycję procentową paska (od 0% do 100%)
-            // Ponieważ obraz z kamery jest odwrócony, mnożymy przez -1, aby kierunek ruchu kropki odpowiadał przechyleniu dziecka
             let visualLeft = 50 - (currentHeadDeviation * 450); 
             visualLeft = Math.max(0, Math.min(100, visualLeft));
             
             indicatorDot.style.left = `${visualLeft}%`;
 
-            // Efekt wizualny (rotacja ikonki oraz kolor kropki)
             let rotationAngle = (visualLeft - 50) * 0.4;
             headIcon.style.transform = `rotate(${rotationAngle}deg)`;
 
             if (isHeadMoving) {
-                // Poza strefą bezpieczną - żółty lub czerwony w zależności od wielkości błędu
                 let severity = Math.abs(visualLeft - 50);
                 if (severity > 30) {
                     indicatorDot.style.backgroundColor = "#ff2255";
@@ -322,7 +343,6 @@
                     indicatorDot.style.boxShadow = "0 0 12px #ffcc00";
                 }
             } else {
-                // Idealnie prosto - piękny zielony/turkusowy kolor
                 indicatorDot.style.backgroundColor = "#00ffcc";
                 indicatorDot.style.boxShadow = "0 0 12px #00ffcc";
             }
@@ -333,10 +353,17 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Ukrywanie wskaźnika myszy nad obszarem gry, ale pokazywanie go nad panelem widgetu
+            let widgetRect = document.getElementById('posture-widget').getBoundingClientRect();
+            if (currentX >= widgetRect.left && currentX <= widgetRect.right && currentY >= widgetRect.top && currentY <= widgetRect.bottom) {
+                document.body.style.cursor = 'default';
+            } else {
+                document.body.style.cursor = 'none';
+            }
+
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            // Aktualizacja graficznego interfejsu biofeedbacku
             updatePostureWidget();
 
             let nowTime = performance.now();
@@ -476,27 +503,35 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function roundTo(num, places) { return +(math = Math.round(num + "e+" + places)  + "e-" + places); }
+        function roundTo(num, places) { return +(Math.round(num + "e+" + places)  + "e-" + places); }
 
         window.addEventListener('mousemove', (e) => {
-            if (!isGameRunning) return;
             currentX = e.clientX; currentY = e.clientY;
         });
 
-        // --- MEDIAPIPE: ANALIZA VECTORA GŁOWY ---
+        // Obsługa skrótu klawiszowego R do kalibracji
+        window.addEventListener('keydown', (e) => {
+            if (isGameRunning && (e.key === 'r' || e.key === 'R')) {
+                calibrateHeadPosition();
+            }
+            if (isGameRunning && e.key === 'Escape') {
+                exitToMenu();
+            }
+        });
+
+        // --- MEDIAPIPE: ANALIZA WSPÓŁRZĘDNYCH TWARZY ---
         const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
         faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const noseX = results.multiFaceLandmarks[0][4].x;
+                lastNoseX = noseX;
                 
                 if (baseHeadX === null) baseHeadX = noseX;
                 
-                // Wyliczanie fizycznego przesunięcia od punktu zero
                 currentHeadDeviation = noseX - baseHeadX;
 
-                // Sprawdzanie czy przekracza tolerancję
                 if (Math.abs(currentHeadDeviation) > HEAD_TOLERANCE) {
                     isHeadMoving = true;
                 } else {
@@ -521,7 +556,7 @@
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `raport_graficzny_A_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", `raport_kalibracja_A_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
