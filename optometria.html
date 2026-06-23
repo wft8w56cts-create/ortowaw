@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trening Optometryczny - Ścieżka A (Kalibracja)</title>
+    <title>Trening Optometryczny - Ścieżka A (Hybrydowy Biofeedback)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -40,54 +40,29 @@
         #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
         #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
+        /* MODYFIKACJA: Latarka z płynnym przejściem stylów (transition) dla efektu baterii */
         #flashlight {
-            position: absolute; width: 220px; height: 220px;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.4) 40%, rgba(255,255,255,0) 70%);
+            position: absolute; width: 240px; height: 240px;
             border-radius: 50%; transform: translate(-50%, -50%);
             pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 5;
-            border: 2px dashed rgba(0, 255, 204, 0.3);
+            transition: background 0.15s ease, border 0.15s ease;
+            /* Domyślny stan: pełna moc */
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.4) 40%, rgba(255,255,255,0) 70%);
+            border: 2px dashed rgba(0, 255, 204, 0.4);
         }
 
         #hud-panel { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 1000; font-size: 1.5rem; text-shadow: 0 0 10px #000; }
         #btn-back { position: absolute; top: 20px; right: 20px; background: #333; color: white; width: auto; font-size: 0.9rem; padding: 8px 15px; z-index: 1000; }
         
-        #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.4; transform: scaleX(-1); }
+        #webcam-container { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 120px; border: 2px solid #333; border-radius: 8px; overflow: hidden; opacity: 0.2; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        
-        /* PANEL BIOFEEDBACKU GŁOWY Z PRZYCISKIEM KALIBRACJI */
-        #posture-widget {
-            position: absolute; bottom: 30px; left: 30px; width: 320px; 
-            background: rgba(0, 0, 10, 0.85); padding: 15px; border-radius: 15px;
-            border: 1px solid #222; z-index: 1000; display: flex; flex-direction: row; 
-            align-items: center; justify-content: space-between; cursor: default;
-        }
-        .widget-main { flex-grow: 1; display: flex; flex-direction: column; align-items: center; margin-right: 15px; }
-        .widget-label { color: #888; font-size: 0.75rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px; }
-        #head-icon { font-size: 1.8rem; margin-bottom: 5px; transition: transform 0.1s ease; }
-        .bar-container { position: relative; width: 100%; height: 8px; background: #111; border-radius: 4px; }
-        .safety-zone { position: absolute; left: 35%; width: 30%; height: 100%; background: rgba(0, 255, 200, 0.15); border-left: 1px solid rgba(0,255,200,0.3); border-right: 1px solid rgba(0,255,200,0.3); }
-        #indicator-dot {
-            position: absolute; top: -4px; left: 50%; width: 16px; height: 16px;
-            background: #00ffcc; border-radius: 50%; transform: translateX(-50%);
-            box-shadow: 0 0 10px #00ffcc; transition: left 0.1s ease, background 0.2s;
-        }
-        /* STYLIZACJA PRZYCISKU KALIBRACJI */
-        #btn-calibrate {
-            background: #1a1a3a; color: #00ffcc; border: 1px solid #00ffcc;
-            width: 75px; height: 45px; font-size: 0.8rem; font-weight: bold;
-            border-radius: 10px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; padding: 4px;
-            transition: all 0.2s ease; margin-top: 0; box-shadow: 0 0 5px rgba(0, 255, 204, 0.2);
-        }
-        #btn-calibrate:hover { background: #00ffcc; color: black; box-shadow: 0 0 15px #00ffcc; }
-        #btn-calibrate span { font-size: 1rem; margin-bottom: 2px; }
     </style>
 </head>
 <body>
 
     <div id="menu-screen">
         <h1 style="font-size: 2.2rem; margin-bottom: 5px; letter-spacing: 1px;">TRENING OPTOMETRYCZNY</h1>
-        <p style="color: #00ffcc; margin-bottom: 25px; font-weight: bold;">Ścieżka A: Kamera internetowa + Graficzny Biofeedback</p>
+        <p style="color: #00ffcc; margin-bottom: 25px; font-weight: bold;">Ścieżka A: Kamera internetowa + Immersyjny Biofeedback</p>
 
         <div class="setup-section">
             <label style="font-weight: bold; color: #ffffff;">WYBIERZ TRYB GRY:</label>
@@ -117,21 +92,6 @@
     <div id="game-container">
         <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
         <div id="hud-panel"><span id="hud-text">Uruchamianie...</span></div>
-        
-        <div id="posture-widget" onmouseover="document.body.style.cursor='default'" onmouseout="if(isGameRunning) document.body.style.cursor='none'">
-            <div class="widget-main">
-                <div class="widget-label">POZYCJA GŁOWY</div>
-                <div id="head-icon">👦</div>
-                <div class="bar-container">
-                    <div class="safety-zone"></div>
-                    <div id="indicator-dot"></div>
-                </div>
-            </div>
-            <button id="btn-calibrate" onclick="calibrateHeadPosition()" title="Resetuje pozycję środkową (Klawisz R)">
-                <span>🎯</span>Reset
-            </button>
-        </div>
-
         <canvas id="game-canvas"></canvas>
         <div id="flashlight"></div>
     </div>
@@ -147,9 +107,6 @@
         const videoElement = document.getElementById('webcam');
         const hudText = document.getElementById('hud-text');
         const btnDownload = document.getElementById('btn-download');
-        
-        const indicatorDot = document.getElementById('indicator-dot');
-        const headIcon = document.getElementById('head-icon');
 
         let gameMode = 'rocket';
         let mazeType = '1';
@@ -158,7 +115,7 @@
         let currentX = window.innerWidth / 2;
         let currentY = window.innerHeight / 2;
 
-        // Parametry śledzenia głowy
+        // Logika głowy i biofeedbacku
         let isHeadMoving = false;
         let baseHeadX = null;
         let currentHeadDeviation = 0; 
@@ -177,7 +134,7 @@
                 let gain = audioCtx.createGain();
                 osc.type = type;
                 osc.frequency.value = freq;
-                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
@@ -186,11 +143,10 @@
             } catch(e) {}
         }
 
-        // Funkcja kalibracji pozycji głowy
         function calibrateHeadPosition() {
             if (lastNoseX !== null) {
                 baseHeadX = lastNoseX;
-                playBeep(587.33, 0.15, "sine"); // Przyjemny dźwięk potwierdzający kalibrację (D5)
+                playBeep(587.33, 0.1, "sine");
             }
         }
 
@@ -298,16 +254,16 @@
 
             if (gameMode === 'rocket') {
                 rocketMode1.x = canvas.width * 0.1; rocketMode1.y = canvas.height / 2;
-                hudText.innerText = "Tryb 1: Rozświetlaj lecącą rakietę!";
+                hudText.innerText = "Tryb 1: Rozświetlaj lecącą rakietę! [R - Kalibracja głowy]";
             } else if (gameMode === 'bug') {
                 generateMaze(mazeType); bug.progress = 0;
-                hudText.innerText = "Tryb 2: Oświetlaj robaczka, aby szedł do wyjścia!";
+                hudText.innerText = "Tryb 2: Oświetlaj robaczka, aby szedł! [R - Kalibracja głowy]";
             } else if (gameMode === 'classic') {
                 classicRocket.score = 0; spawnClassicRocket();
-                hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
+                hudText.innerText = `Tryb 3: Punkty: ${classicRocket.score} [R - Kalibracja głowy]`;
             } else if (gameMode === 'static') {
                 staticRocket.score = 0; spawnStaticRocket();
-                hudText.innerText = `Tryb 4: Oświetl nieruchomą rakietę! Punkty: ${staticRocket.score}`;
+                hudText.innerText = `Tryb 4: Punkty: ${staticRocket.score} [R - Kalibracja głowy]`;
             }
 
             isGameRunning = true;
@@ -324,27 +280,27 @@
 
         let lastSoundTime = 0;
 
-        function updatePostureWidget() {
-            let visualLeft = 50 - (currentHeadDeviation * 450); 
-            visualLeft = Math.max(0, Math.min(100, visualLeft));
-            
-            indicatorDot.style.left = `${visualLeft}%`;
-
-            let rotationAngle = (visualLeft - 50) * 0.4;
-            headIcon.style.transform = `rotate(${rotationAngle}deg)`;
+        // NOWOŚĆ: Funkcja płynnie zmieniająca właściwości latarki na bazie błędu postawy
+        function applyFlashlightBiofeedback() {
+            // Obliczamy stopień błędu (znormalizowany w przybliżeniu od 0.0 do 1.0)
+            let errorFactor = Math.abs(currentHeadDeviation) / (HEAD_TOLERANCE * 2);
+            errorFactor = Math.max(0, Math.min(1, errorFactor)); // Przytnij do zakresu 0 - 1
 
             if (isHeadMoving) {
-                let severity = Math.abs(visualLeft - 50);
-                if (severity > 30) {
-                    indicatorDot.style.backgroundColor = "#ff2255";
-                    indicatorDot.style.boxShadow = "0 0 12px #ff2255";
-                } else {
-                    indicatorDot.style.backgroundColor = "#ffcc00";
-                    indicatorDot.style.boxShadow = "0 0 12px #ffcc00";
-                }
+                // EFEKT ROZŁADOWANEJ BATERII:
+                // Jasność (opacity) spada płynnie z 1.0 do 0.20
+                let currentOpacity = 1.0 - (errorFactor * 0.80);
+                // Barwa przechodzi z bieli w brudną czerwień/ciepły bursztyn
+                let red = Math.round(255);
+                let green = Math.round(255 - (errorFactor * 200)); // Mniej zielonego -> bardziej czerwono
+                let blue = Math.round(255 - (errorFactor * 255));  // Brak niebieskiego -> czysta czerwień/żółć
+
+                flashlight.style.background = `radial-gradient(circle, rgba(${red},${green},${blue},${currentOpacity}) 0%, rgba(${red},${green},0,${currentOpacity * 0.4}) 50%, rgba(0,0,0,0) 75%)`;
+                flashlight.style.border = `2px dashed rgba(255, 50, 0, ${0.1 + (errorFactor * 0.3)})`;
             } else {
-                indicatorDot.style.backgroundColor = "#00ffcc";
-                indicatorDot.style.boxShadow = "0 0 12px #00ffcc";
+                // STAN IDEALNY: Pełna moc, białe światło, niebiesko-turkusowa obwódka
+                flashlight.style.background = `radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.45) 40%, rgba(255,255,255,0) 70%)`;
+                flashlight.style.border = `2px dashed rgba(0, 255, 204, 0.4)`;
             }
         }
 
@@ -353,18 +309,11 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Ukrywanie wskaźnika myszy nad obszarem gry, ale pokazywanie go nad panelem widgetu
-            let widgetRect = document.getElementById('posture-widget').getBoundingClientRect();
-            if (currentX >= widgetRect.left && currentX <= widgetRect.right && currentY >= widgetRect.top && currentY <= widgetRect.bottom) {
-                document.body.style.cursor = 'default';
-            } else {
-                document.body.style.cursor = 'none';
-            }
-
             flashlight.style.left = currentX + 'px';
             flashlight.style.top = currentY + 'px';
 
-            updatePostureWidget();
+            // Aplikacja efektu starej baterii bezpośrednio na latarkę
+            applyFlashlightBiofeedback();
 
             let nowTime = performance.now();
 
@@ -388,7 +337,7 @@
 
                 if (rocketMode1.isLit) {
                     ctx.beginPath(); ctx.arc(rocketMode1.x, rocketMode1.y, 35 + Math.sin(rocketMode1.pulse) * 6, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(0, 255, 204, 0.2)'; ctx.fill();
+                    ctx.fillStyle = 'rgba(0, 255, 204, 0.15)'; ctx.fill();
                 }
                 drawVectorRocket(rocketMode1.x, rocketMode1.y, rocketMode1.radius, rocketMode1.angle, rocketMode1.isLit, rocketMode1.pulse);
 
@@ -412,7 +361,7 @@
                     if (bug.progress >= 1.0) {
                         bug.progress = 0; playBeep(600, 0.3);
                         hudText.innerText = "✨ Super! Labirynt ukończony! ✨";
-                        setTimeout(() => { if(isGameRunning) hudText.innerText = "Oświetlaj robaczka, aby szedł!"; }, 2000);
+                        setTimeout(() => { if(isGameRunning) hudText.innerText = "Oświetlaj robaczka, aby szedł! [R - Kalibracja]"; }, 2000);
                     }
                 } else { bug.isLit = false; }
 
@@ -440,7 +389,7 @@
 
                     if (classicRocket.lockTime >= 1500) {
                         createExplosion(classicRocket.x, classicRocket.y); playBeep(180, 0.4, "sawtooth"); 
-                        classicRocket.score++; hudText.innerText = `Tryb 3: Przytrzymaj wzrok na rakiecie! Punkty: ${classicRocket.score}`;
+                        classicRocket.score++; hudText.innerText = `Tryb 3: Punkty: ${classicRocket.score} [R - Kalibracja]`;
                         spawnClassicRocket();
                     }
                 } else {
@@ -465,7 +414,7 @@
 
                     if (staticRocket.lockTime >= 1500) {
                         createExplosion(staticRocket.x, staticRocket.y); playBeep(220, 0.35, "sine");
-                        staticRocket.score++; hudText.innerText = `Tryb 4: Oświetl nieruchomą rakietę! Punkty: ${staticRocket.score}`;
+                        staticRocket.score++; hudText.innerText = `Tryb 4: Punkty: ${staticRocket.score} [R - Kalibracja]`;
                         spawnStaticRocket();
                     }
                 } else {
@@ -509,7 +458,7 @@
             currentX = e.clientX; currentY = e.clientY;
         });
 
-        // Obsługa skrótu klawiszowego R do kalibracji
+        // Klawisz R kalibruje pozycję głowy, ESC wychodzi do menu
         window.addEventListener('keydown', (e) => {
             if (isGameRunning && (e.key === 'r' || e.key === 'R')) {
                 calibrateHeadPosition();
@@ -519,7 +468,7 @@
             }
         });
 
-        // --- MEDIAPIPE: ANALIZA WSPÓŁRZĘDNYCH TWARZY ---
+        // --- MEDIAPIPE: DETEKCJA TWARZY ---
         const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
         faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         
@@ -556,7 +505,7 @@
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `raport_kalibracja_A_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", `raport_baterii_A_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
