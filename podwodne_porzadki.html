@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trening Optometryczny - Podwodne Porządki</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #02020a;
+            font-family: 'Segoe UI', Arial, sans-serif; cursor: none;
+        }
+
+        #menu-screen {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #030310; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999; color: white;
+            cursor: default;
+        }
+        .setup-section {
+            background: rgba(255,255,255,0.04); padding: 20px; 
+            border-radius: 15px; margin: 10px; width: 400px; text-align: center;
+            border: 1px solid #151530;
+        }
+        select, button {
+            padding: 14px 20px; font-size: 1rem; font-weight: bold; border-radius: 25px;
+            border: none; margin-top: 10px; width: 100%; cursor: pointer; font-family: inherit;
+        }
+        select { background: #121225; color: white; border: 1px solid #252545; }
+        #btn-start { background: #00ccff; color: #02020a; font-size: 1.4rem; margin-top: 20px; box-shadow: 0 0 25px rgba(0, 204, 255, 0.4); }
+        #btn-start:hover { background: #00ffcc; box-shadow: 0 0 30px #00ffcc; }
+        
+        #btn-download { background: #4e54c8; color: white; margin-top: 10px; display: none; }
+
+        #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        /* Maska ciemności nakładana na całą grę */
+        #darkness-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(2, 2, 10, 0.94); pointer-events: none; z-index: 2;
+        }
+
+        /* Automatyczny reflektor/latarka */
+        #searchlight {
+            position: absolute; width: 280px; height: 280px;
+            border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 3;
+            transition: background 0.12s ease, border 0.12s ease;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.4) 45%, rgba(255,255,255,0) 70%);
+            border: 2px dashed rgba(0, 180, 255, 0.3);
+        }
+
+        #hud-panel { position: absolute; top: 25px; left: 25px; color: #fff; z-index: 1000; font-size: 1.4rem; text-shadow: 0 0 10px #000; font-weight: 500; }
+        #btn-back { position: absolute; top: 25px; right: 25px; background: #1a1a2e; color: #888; width: auto; font-size: 0.9rem; padding: 8px 18px; border: 1px solid #252545; z-index: 1000; }
+        #btn-back:hover { color: #fff; background: #252545; }
+        
+        #webcam-container { position: absolute; bottom: 15px; right: 15px; width: 140px; height: 105px; border: 1px solid #224; border-radius: 8px; overflow: hidden; opacity: 0.15; transform: scaleX(-1); z-index: 1000;}
+        video { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen">
+        <h1 style="font-size: 2.4rem; margin-bottom: 5px; letter-spacing: 1px; color: #00ccff;">PODWODNE PORZĄDKI</h1>
+        <p style="color: #8892b0; margin-bottom: 30px; font-size: 1.1rem;">Trening fiksacji i uwagi z autonomicznym biofeedbackiem</p>
+
+        <div class="setup-section">
+            <label style="font-weight: bold; color: #ffffff; display:block; margin-bottom: 8px;">POZIOM TRUDNOŚCI:</label>
+            <select id="difficulty-select">
+                <option value="1">Poziom 1: Szukaj tego samego gatunku (np. Krab = Krab)</option>
+                <option value="2">Poziom 2: Szukaj identycznego koloru i gatunku</option>
+            </select>
+        </div>
+
+        <div style="width: 400px;">
+            <button id="btn-start" onclick="startGame()">URUCHOM MISJĘ 🌊</button>
+            <button id="btn-download" onclick="downloadCSV()">💾 POBIERZ RAPORT Z SESJI (.CSV)</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
+        <div id="hud-panel"><span id="hud-text">Inicjalizacja głębin...</span></div>
+        
+        <canvas id="game-canvas"></canvas>
+        <div id="darkness-overlay"></div>
+        <div id="searchlight"></div>
+    </div>
+
+    <div id="webcam-container"><video id="webcam" autoplay playsinline></video></div>
+
+    <script>
+        const menuScreen = document.getElementById('menu-screen');
+        const gameContainer = document.getElementById('game-container');
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const searchlight = document.getElementById('searchlight');
+        const videoElement = document.getElementById('webcam');
+        const hudText = document.getElementById('hud-text');
+        const btnDownload = document.getElementById('btn-download');
+
+        let isGameRunning = false;
+        let difficultyLevel = 1; // 1 lub 2
+
+        // Współrzędne światła (sterowane autonomicznie)
+        let lightX = window.innerWidth / 2;
+        let lightY = window.innerHeight / 2;
+        let lightTime = 0;
+
+        // Parametry analizy postawy głowy
+        let isHeadMoving = false;
+        let baseHeadX = null;
+        let currentHeadDeviation = 0;
+        let lastNoseX = null;
+        const HEAD_TOLERANCE = 0.022;
+
+        // Struktury danych gry
+        let types = ['octopus', 'jellyfish', 'crab', 'fish', 'starfish'];
+        let colors = ['#ff4757', '#eccc68', '#1e90ff', '#2ed573', '#ffa502'];
+        
+        let centerTarget = { type: '', color: '' };
+        let seaCreatures = [];
+        let score = 0;
+
+        let telemetryLog = [];
+        let sessionStartTime = 0;
+        let lastLogTime = 0;
+        let audioCtx = null;
+
+        function playSound(freq, duration, type="sine", vol=0.05) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function calibrateHeadPosition() {
+            if (lastNoseX !== null) {
+                baseHeadX = lastNoseX;
+                playSound(523.25, 0.15, "sine", 0.06); // C5 - potwierdzenie kalibracji
+            }
+        }
+
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- RYSOWANIE PROCEDURALNYCH STWORZEŃ ---
+        function drawCreature(ctx, type, color, x, y, size, angle = 0, pulse = 0) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = "round";
+
+            if (type === 'octopus') {
+                // Głowa
+                ctx.beginPath(); ctx.arc(0, -10, size*0.5, Math.PI, 0); ctx.lineTo(size*0.5, 5); ctx.quadraticCurveTo(0, 15, -size*0.5, 5); ctx.closePath(); ctx.fill();
+                // Macki
+                for(let i=0; i<5; i++) {
+                    ctx.beginPath(); ctx.moveTo(-size*0.4 + (i*size*0.2), 8);
+                    let offset = Math.sin(pulse + i) * 12;
+                    ctx.quadraticCurveTo(-size*0.4 + (i*size*0.2) + offset, 25, -size*0.3 + (i*size*0.2) + offset*0.5, 38); ctx.stroke();
+                }
+                // Oczy
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-6, -5, 3, 0, Math.PI*2); ctx.arc(6, -5, 3, 0, Math.PI*2); ctx.fill();
+            } 
+            else if (type === 'jellyfish') {
+                // Parasol meduzy
+                ctx.beginPath(); ctx.arc(0, -5, size*0.55, Math.PI, 0); ctx.closePath(); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(-size*0.55, -5); ctx.quadraticCurveTo(0, 2, size*0.55, -5); ctx.lineWidth = 4; ctx.stroke(); ctx.lineWidth = 3;
+                // Parzydełka
+                for(let i=0; i<4; i++) {
+                    ctx.beginPath(); ctx.moveTo(-size*0.4 + (i*size*0.27), 0);
+                    let ox = Math.cos(pulse + i)*8;
+                    ctx.bezierCurveTo(-size*0.4+(i*size*0.27)+ox, 15, -size*0.4+(i*size*0.27)-ox, 25, -size*0.4+(i*size*0.27)+ox, 35); ctx.stroke();
+                }
+            } 
+            else if (type === 'crab') {
+                // Korpus
+                ctx.beginPath(); ctx.ellipse(0, 5, size*0.5, size*0.35, 0, 0, Math.PI*2); ctx.fill();
+                // Nóżki
+                for(let side of [-1, 1]) {
+                    for(let i=0; i<3; i++) {
+                        ctx.beginPath(); ctx.moveTo(side*size*0.3, 8);
+                        ctx.quadraticCurveTo(side*size*0.6, 5 + i*8, side*size*0.65, 18 + i*4); ctx.stroke();
+                    }
+                    // Szczypce
+                    ctx.beginPath(); ctx.moveTo(side*size*0.25, -2);
+                    ctx.quadraticCurveTo(side*size*0.5, -15, side*size*0.4, -22); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(side*size*0.4, -22, 6, 0, Math.PI*2); ctx.fill();
+                }
+                // Oczy na słupkach
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(-8, -5); ctx.lineTo(-12, -16); ctx.moveTo(8, -5); ctx.lineTo(12, -16); ctx.stroke();
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-12, -16, 3, 0, Math.PI*2); ctx.arc(12, -16, 3, 0, Math.PI*2); ctx.fill();
+            } 
+            else if (type === 'fish') {
+                // Tułów
+                ctx.beginPath(); ctx.ellipse(0, 0, size*0.55, size*0.35, 0, 0, Math.PI*2); ctx.fill();
+                // Ogon
+                ctx.beginPath(); ctx.moveTo(-size*0.5, 0); ctx.lineTo(-size*0.85, -18); ctx.lineTo(-size*0.75, 0); ctx.lineTo(-size*0.85, 18); ctx.closePath(); ctx.fill();
+                // Płetwa grzbietowa
+                ctx.beginPath(); ctx.moveTo(-10, -size*0.3); ctx.quadraticCurveTo(-5, -size*0.65, 10, -size*0.25); ctx.closePath(); ctx.fill();
+                // Oko
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(12, -4, 3.5, 0, Math.PI*2); ctx.fill();
+            } 
+            else if (type === 'starfish') {
+                // Rozgwiazda rysowana z ramionami w pętli
+                ctx.beginPath();
+                let spikes = 5; let outer = size * 0.6; let inner = size * 0.25;
+                let rot = Math.PI / 2 * 3; let step = Math.PI / spikes;
+                ctx.moveTo(0, -outer);
+                for (let i = 0; i < spikes; i++) {
+                    let rx = Math.cos(rot) * outer; let ry = Math.sin(rot) * outer; ctx.lineTo(rx, ry); rot += step;
+                    rx = Math.cos(rot) * inner; ry = Math.sin(rot) * inner; ctx.lineTo(rx, ry); rot += step;
+                }
+                ctx.closePath(); ctx.fill();
+                // Małe oczka w centrum
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-4, -2, 2, 0, Math.PI*2); ctx.arc(4, -2, 2, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // --- SYSTEM GENEROWANIA PLANSZY ---
+        function initLevel() {
+            // Losuj stwora centralnego (wzorzec)
+            centerTarget.type = types[Math.floor(Math.random() * types.length)];
+            centerTarget.color = colors[Math.floor(Math.random() * colors.length)];
+
+            seaCreatures = [];
+            let currentW = canvas.width;
+            let currentH = canvas.height;
+
+            // Wyznacz optymalną liczbę celów i przeszkadzajek
+            let targetCopiesCount = Math.floor(Math.random() * 3) + 3; // 3 do 5 poprawnych par na planszy
+            
+            // Generuj poprawne cele
+            for (let i = 0; i < targetCopiesCount; i++) {
+                let p = getRandomSpawnPos(currentW, currentH);
+                seaCreatures.push({
+                    x: p.x, y: p.y, type: centerTarget.type,
+                    color: difficultyLevel === 2 ? centerTarget.color : colors[Math.floor(Math.random() * colors.length)],
+                    size: 38, isTarget: true, pulseOffset: Math.random() * 10, 
+                    isMerging: false, mergeProgress: 0, startX: 0, startY: 0
+                });
+            }
+
+            // Generuj przeszkadzajki (błędne obiekty)
+            let totalDistractors = 15;
+            for (let i = 0; i < totalDistractors; i++) {
+                let p = getRandomSpawnPos(currentW, currentH);
+                let randType = types[Math.floor(Math.random() * types.length)];
+                let randColor = colors[Math.floor(Math.random() * colors.length)];
+
+                // Zabezpieczenie przed wygenerowaniem identycznego obiektu jako distractor
+                if (difficultyLevel === 1 && randType === centerTarget.type) {
+                    randType = types[(types.indexOf(randType) + 1) % types.length];
+                } else if (difficultyLevel === 2 && randType === centerTarget.type && randColor === centerTarget.color) {
+                    randColor = colors[(colors.indexOf(randColor) + 1) % colors.length];
+                }
+
+                seaCreatures.push({
+                    x: p.x, y: p.y, type: randType, color: randColor,
+                    size: 38, isTarget: false, pulseOffset: Math.random() * 10,
+                    isMerging: false, mergeProgress: 0, startX: 0, startY: 0
+                });
+            }
+            updateHUD();
+        }
+
+        function getRandomSpawnPos(w, h) {
+            let attempts = 0;
+            while(attempts < 100) {
+                let rx = Math.random() * (w * 0.85) + (w * 0.075);
+                let ry = Math.random() * (h * 0.82) + (h * 0.09);
+                // Nie spawnuj zbyt blisko środka (wzorca)
+                let distToCenter = Math.hypot(rx - w/2, ry - h/2);
+                if (distToCenter > 160) return { x: rx, y: ry };
+                attempts++;
+            }
+            return { x: Math.random()*w, y: Math.random()*h };
+        }
+
+        function updateHUD() {
+            let remaining = seaCreatures.filter(c => c.isTarget && !c.isMerging).length;
+            let diffTxt = difficultyLevel === 1 ? "Poziom 1 (Gatunek)" : "Poziom 2 (Gatunek + Kolor)";
+            hudText.innerHTML = `🌟 Punkty: <b style='color:#00ffcc'>${score}</b> | Pozostało w toni: <b style='color:#ffcc00'>${remaining}</b> | <small style='color:#888'>${diffTxt}</small>`;
+        }
+
+        function startGame() {
+            difficultyLevel = parseInt(document.getElementById('difficulty-select').value);
+            menuScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+
+            telemetryLog = [];
+            sessionStartTime = performance.now();
+            lastLogTime = 0;
+            baseHeadX = null;
+            score = 0;
+
+            initLevel();
+            isGameRunning = true;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function exitToMenu() {
+            isGameRunning = false;
+            gameContainer.style.display = 'none';
+            menuScreen.style.display = 'flex';
+            if (telemetryLog.length > 0) btnDownload.style.display = 'block';
+        }
+
+        // --- SYSTEM BIOFEEDBACKU LATARKI ---
+        function applySearchlightBiofeedback() {
+            // Skalowanie błędu odchylenia głowy do wartości 0.0 - 1.0
+            let errorFactor = Math.abs(currentHeadDeviation) / (HEAD_TOLERANCE * 2);
+            errorFactor = Math.max(0, Math.min(1, errorFactor));
+
+            if (isHeadMoving) {
+                // Efekt rozładowującej się baterii: ciemnienie i przejście w czerwień/bursztyn
+                let opacity = 1.0 - (errorFactor * 0.85); // Spadek jasności do 15%
+                let r = 255;
+                let g = Math.round(240 - (errorFactor * 190));
+                let b = Math.round(240 - (errorFactor * 240));
+
+                searchlight.style.background = `radial-gradient(circle, rgba(${r},${g},${b},${opacity}) 0%, rgba(${r},${g*0.4},0,${opacity*0.4}) 50%, rgba(0,0,0,0) 70%)`;
+                searchlight.style.border = `2px dashed rgba(255, 60, 0, ${0.1 + (errorFactor * 0.3)})`;
+            } else {
+                // Pozycja idealna - czyste, mocne światło głębinowe
+                searchlight.style.background = `radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(220,245,255,0.5) 45%, rgba(0,0,0,0) 70%)`;
+                searchlight.style.border = `2px dashed rgba(0, 180, 255, 0.35)`;
+            }
+        }
+
+        // --- PĘTLA GŁÓWNA GRY ---
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            let now = performance.now();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Autonomiczny ruch reflektora (funkcje oparte na czasie dla płynności ruchu)
+            lightTime += 0.004;
+            lightX = canvas.width / 2 + Math.sin(lightTime * 1.7) * (canvas.width * 0.38) + Math.cos(lightTime * 0.7) * (canvas.width * 0.05);
+            lightY = canvas.height / 2 + Math.cos(lightTime * 1.2) * (canvas.height * 0.35) + Math.sin(lightTime * 2.1) * (canvas.height * 0.04);
+
+            searchlight.style.left = lightX + 'px';
+            searchlight.style.top = lightY + 'px';
+
+            applySearchlightBiofeedback();
+
+            // 2. Rysowanie wzorca na środku ekranu
+            ctx.fillStyle = 'rgba(15, 15, 35, 0.6)';
+            ctx.strokeStyle = '#252545';
+            ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 65, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            
+            drawCreature(ctx, centerTarget.type, centerTarget.color, canvas.width/2, canvas.height/2, 45, 0, now * 0.003);
+
+            // 3. Aktualizacja i rysowanie stworów w toni
+            let targetsLeft = 0;
+            let currentOndulation = now * 0.003;
+
+            for (let i = 0; i < seaCreatures.length; i++) {
+                let c = seaCreatures[i];
+
+                if (c.isTarget && !c.isMerging) targetsLeft++;
+
+                if (c.isMerging) {
+                    // Animacja scalania ze wzorcem centralnym
+                    c.mergeProgress += 0.04;
+                    if (c.mergeProgress >= 1.0) {
+                        seaCreatures.splice(i, 1);
+                        i--;
+                        score += 10;
+                        updateHUD();
+                        // Jeśli wyczyszczono planszę z poprawnych stworów, przejdź do następnego etapu
+                        if (seaCreatures.filter(obj => obj.isTarget).length === 0) {
+                            playSound(659.25, 0.4, "sine", 0.06); // E5 - Wyczyszczenie planszy
+                            initLevel();
+                        }
+                        continue;
+                    }
+                    // Interpolacja liniowa pozycji ku środkowi
+                    c.x = c.startX + (canvas.width / 2 - c.startX) * c.mergeProgress;
+                    c.y = c.startY + (canvas.height / 2 - c.startY) * c.mergeProgress;
+                    c.size = 38 * (1.0 - c.mergeProgress * 0.4);
+                }
+
+                // Rysuj stwora
+                drawCreature(ctx, c.type, c.color, c.x, c.y, c.size, 0, currentOndulation + c.pulseOffset);
+            }
+
+            // 4. Logowanie telemetrii (50ms)
+            let elapsed = now - sessionStartTime;
+            if (elapsed - lastLogTime >= 50) {
+                telemetryLog.push({
+                    timestamp: Math.round(elapsed),
+                    lightX: Math.round(lightX),
+                    lightY: Math.round(lightY),
+                    headMovement: isHeadMoving ? 1 : 0,
+                    headDeviation: roundTo(currentHeadDeviation, 4),
+                    score: score
+                });
+                lastLogTime = elapsed;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function roundTo(num, places) { return +(Math.round(num + "e+" + places)  + "e-" + places); }
+
+        // --- OBSŁUGA REAKCJI KLIENTA (SPACJA) ---
+        window.addEventListener('keydown', (e) => {
+            if (!isGameRunning) return;
+
+            if (e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
+
+                // Sprawdź, czy podświetlony stwór pasuje do wzorca
+                let foundMatch = false;
+
+                for (let i = 0; i < seaCreatures.length; i++) {
+                    let c = seaCreatures[i];
+                    if (c.isMerging) continue;
+
+                    // Czy stwór znajduje się w promieniu dzisiejszego reflektora?
+                    let distToLight = Math.hypot(c.x - lightX, c.y - lightY);
+                    
+                    if (distToLight < 110) { // Obiekt wewnątrz snopu światła
+                        
+                        if (isHeadMoving) {
+                            // Jeśli głowa jest w ruchu, latarka jest ciemna, dyskwalifikujemy próbę kliknięcia
+                            playSound(150, 0.15, "sawtooth", 0.07);
+                            break;
+                        }
+
+                        let isCorrectSelection = false;
+                        if (difficultyLevel === 1) {
+                            isCorrectSelection = (c.type === centerTarget.type);
+                        } else {
+                            isCorrectSelection = (c.type === centerTarget.type && c.color === centerTarget.color);
+                        }
+
+                        if (isCorrectSelection && c.isTarget) {
+                            // Trafienie!
+                            c.isMerging = true;
+                            c.startX = c.x; c.startY = c.y;
+                            playSound(440, 0.12, "sine", 0.06); // A4 - Sukces
+                            foundMatch = true;
+                            break;
+                        } else {
+                            // Pomyłka (Kliknięcie na błędny obiekt)
+                            playSound(220, 0.25, "triangle", 0.07); // Niski ton błędu
+                            score = Math.max(0, score - 5);
+                            updateHUD();
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (e.key === 'r' || e.key === 'R') {
+                calibrateHeadPosition();
+            }
+            if (e.key === 'Escape') {
+                exitToMenu();
+            }
+        });
+
+        // --- MEDIAPIPE AI: ŚLEDZENIE POZYCJI GŁOWY ---
+        const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        
+        faceMesh.onResults((results) => {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const noseX = results.multiFaceLandmarks[0][4].x; // Czubek nosa
+                lastNoseX = noseX;
+                
+                if (baseHeadX === null) baseHeadX = noseX;
+                currentHeadDeviation = noseX - baseHeadX;
+
+                if (Math.abs(currentHeadDeviation) > HEAD_TOLERANCE) {
+                    isHeadMoving = true;
+                } else {
+                    isHeadMoving = false;
+                }
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await faceMesh.send({ image: videoElement }); },
+            width: 640, height: 480
+        });
+        camera.start();
+
+        // --- GENEROWANIE RAPORTU CSV ---
+        function downloadCSV() {
+            if (telemetryLog.length === 0) return;
+            let csv = "data:text/csv;charset=utf-8,Czas_ms,Reflektor_X,Reflektor_Y,Blad_Postawy,Odchylenie_Nosa,Punkty\n";
+            telemetryLog.forEach(row => {
+                csv += `${row.timestamp},${row.lightX},${row.lightY},${row.headMovement},${row.headDeviation},${row.score}\n`;
+            });
+            const encodedUri = encodeURI(csv);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `raport_podwodne_porzadki_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
