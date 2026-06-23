@@ -39,36 +39,11 @@
         #game-container { position: relative; width: 100vw; height: 100vh; display: none; }
         #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-        /* Maska ciemności nałożona na grę */
-        #darkness-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(2, 2, 10, 0.95); pointer-events: none; z-index: 2;
-        }
-
-        /* ZMIANA: Mniejszy promień (190px) i wyraźne, ostre odcięcie krawędzi latarki */
-        #searchlight {
-            position: absolute; width: 190px; height: 190px;
-            border-radius: 50%; transform: translate(-50%, -50%);
-            pointer-events: none; mix-blend-mode: screen; left: 50%; top: 50%; z-index: 3;
-            transition: background 0.1s ease, border 0.1s ease;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,0) 82%);
-            border: 2px solid rgba(0, 180, 255, 0.5);
-        }
-
-        /* ZMIANA: Wyraźnie doświetlona strefa centralna dla wzorca (Ośmiornicy) */
-        #center-light-zone {
-            position: absolute; width: 150px; height: 150px;
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            border-radius: 50%; pointer-events: none; z-index: 3;
-            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 60%, rgba(0,0,0,0) 75%);
-            border: 1px dashed rgba(0, 255, 204, 0.3);
-        }
-
         #hud-panel { position: absolute; top: 25px; left: 25px; color: #fff; z-index: 1000; font-size: 1.4rem; text-shadow: 0 0 10px #000; font-weight: 500; }
         #btn-back { position: absolute; top: 25px; right: 25px; background: #1a1a2e; color: #888; width: auto; font-size: 0.9rem; padding: 8px 18px; border: 1px solid #252545; z-index: 1000; }
         #btn-back:hover { color: #fff; background: #252545; }
         
-        #webcam-container { position: absolute; bottom: 15px; right: 15px; width: 140px; height: 105px; border: 1px solid #224; border-radius: 8px; overflow: hidden; opacity: 0.15; transform: scaleX(-1); z-index: 1000;}
+        #webcam-container { position: absolute; bottom: 15px; right: 15px; width: 140px; height: 105px; border: 1px solid #224; border-radius: 8px; overflow: hidden; opacity: 0.05; transform: scaleX(-1); z-index: 1000;}
         video { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
@@ -95,11 +70,7 @@
     <div id="game-container">
         <button id="btn-back" onclick="exitToMenu()">⚙️ MENU</button>
         <div id="hud-panel"><span id="hud-text">Inicjalizacja głębin...</span></div>
-        
         <canvas id="game-canvas"></canvas>
-        <div id="darkness-overlay"></div>
-        <div id="center-light-zone"></div>
-        <div id="searchlight"></div>
     </div>
 
     <div id="webcam-container"><video id="webcam" autoplay playsinline></video></div>
@@ -109,7 +80,6 @@
         const gameContainer = document.getElementById('game-container');
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
-        const searchlight = document.getElementById('searchlight');
         const videoElement = document.getElementById('webcam');
         const hudText = document.getElementById('hud-text');
         const btnDownload = document.getElementById('btn-download');
@@ -117,19 +87,21 @@
         let isGameRunning = false;
         let difficultyLevel = 1;
 
-        // Współrzędne światła (sterowane autonomicznie)
+        // Autonomiczny reflektor
         let lightX = window.innerWidth / 2;
         let lightY = window.innerHeight / 2;
         let lightTime = 0;
+        const LIGHT_RADIUS = 95; // Promień latarki
+        const CENTER_RADIUS = 65; // Promień strefy wzorca
 
-        // Parametry analizy postawy głowy
+        // Analiza postawy
         let isHeadMoving = false;
         let baseHeadX = null;
         let currentHeadDeviation = 0;
         let lastNoseX = null;
         const HEAD_TOLERANCE = 0.022;
 
-        // Struktury danych gry
+        // Dane gry
         let types = ['octopus', 'jellyfish', 'crab', 'fish', 'starfish'];
         let colors = ['#ff4757', '#eccc68', '#1e90ff', '#2ed573', '#ffa502'];
         
@@ -167,21 +139,14 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- RYSOWANIE PROCEDURALNYCH STWORZEŃ ---
-        function drawCreature(ctx, type, color, x, y, size, angle = 0, pulse = 0, forceBright = false) {
+        // --- PROCEDURALNE RYSOWANIE STWORÓW ---
+        function drawCreature(ctx, type, color, x, y, size, pulse = 0) {
             ctx.save();
             ctx.translate(x, y);
-            ctx.rotate(angle);
             ctx.fillStyle = color;
             ctx.strokeStyle = color;
             ctx.lineWidth = 3;
             ctx.lineCap = "round";
-
-            // ZMIANA: Obiekt centralny ignoruje przyciemnienie płótna pod maską ciemności (zwiększamy widoczność poprzez shadow)
-            if (forceBright) {
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = color;
-            }
 
             if (type === 'octopus') {
                 ctx.beginPath(); ctx.arc(0, -10, size*0.5, Math.PI, 0); ctx.lineTo(size*0.5, 5); ctx.quadraticCurveTo(0, 15, -size*0.5, 5); ctx.closePath(); ctx.fill();
@@ -212,8 +177,7 @@
                     ctx.quadraticCurveTo(side*size*0.5, -15, side*size*0.4, -22); ctx.stroke();
                     ctx.beginPath(); ctx.arc(side*size*0.4, -22, 6, 0, Math.PI*2); ctx.fill();
                 }
-                ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(-8, -5); ctx.lineTo(-12, -16); ctx.moveTo(8, -5); ctx.lineTo(12, -16); ctx.stroke();
+                ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, -5); ctx.lineTo(-12, -16); ctx.moveTo(8, -5); ctx.lineTo(12, -16); ctx.stroke();
                 ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-12, -16, 3, 0, Math.PI*2); ctx.arc(12, -16, 3, 0, Math.PI*2); ctx.fill();
             } 
             else if (type === 'fish') {
@@ -234,23 +198,17 @@
                 ctx.closePath(); ctx.fill();
                 ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-4, -2, 2, 0, Math.PI*2); ctx.arc(4, -2, 2, 0, Math.PI*2); ctx.fill();
             }
-
             ctx.restore();
         }
 
-        // --- SYSTEM GENEROWANIA PLANSZY ---
         function initLevel() {
             centerTarget.type = types[Math.floor(Math.random() * types.length)];
             centerTarget.color = colors[Math.floor(Math.random() * colors.length)];
-
             seaCreatures = [];
-            let currentW = canvas.width;
-            let currentH = canvas.height;
-
-            let targetCopiesCount = Math.floor(Math.random() * 3) + 3;
             
+            let targetCopiesCount = Math.floor(Math.random() * 3) + 3;
             for (let i = 0; i < targetCopiesCount; i++) {
-                let p = getRandomSpawnPos(currentW, currentH);
+                let p = getRandomSpawnPos(canvas.width, canvas.height);
                 seaCreatures.push({
                     x: p.x, y: p.y, type: centerTarget.type,
                     color: difficultyLevel === 2 ? centerTarget.color : colors[Math.floor(Math.random() * colors.length)],
@@ -259,9 +217,9 @@
                 });
             }
 
-            let totalDistractors = 15;
+            let totalDistractors = 14;
             for (let i = 0; i < totalDistractors; i++) {
-                let p = getRandomSpawnPos(currentW, currentH);
+                let p = getRandomSpawnPos(canvas.width, canvas.height);
                 let randType = types[Math.floor(Math.random() * types.length)];
                 let randColor = colors[Math.floor(Math.random() * colors.length)];
 
@@ -284,7 +242,7 @@
             let attempts = 0;
             while(attempts < 100) {
                 let rx = Math.random() * (w * 0.85) + (w * 0.075);
-                let ry = Math.random() * (h * 0.82) + (h * 0.09);
+                let ry = Math.random() * (h * 0.8) + (h * 0.1);
                 let distToCenter = Math.hypot(rx - w/2, ry - h/2);
                 if (distToCenter > 160) return { x: rx, y: ry };
                 attempts++;
@@ -302,13 +260,11 @@
             difficultyLevel = parseInt(document.getElementById('difficulty-select').value);
             menuScreen.style.display = 'none';
             gameContainer.style.display = 'block';
-
             telemetryLog = [];
             sessionStartTime = performance.now();
             lastLogTime = 0;
             baseHeadX = null;
             score = 0;
-
             initLevel();
             isGameRunning = true;
             requestAnimationFrame(gameLoop);
@@ -321,68 +277,26 @@
             if (telemetryLog.length > 0) btnDownload.style.display = 'block';
         }
 
-        // --- SYSTEM BIOFEEDBACKU LATARKI ---
-        function applySearchlightBiofeedback() {
-            let errorFactor = Math.abs(currentHeadDeviation) / (HEAD_TOLERANCE * 2);
-            errorFactor = Math.max(0, Math.min(1, errorFactor));
-
-            if (isHeadMoving) {
-                // ZMIANA: Ściemnianie mniejszego reflektora z ostrym odcięciem
-                let opacity = 1.0 - (errorFactor * 0.88); 
-                let r = 255;
-                let g = Math.round(240 - (errorFactor * 195));
-                let b = Math.round(240 - (errorFactor * 240));
-
-                searchlight.style.background = `radial-gradient(circle, rgba(${r},${g},${b},${opacity}) 0%, rgba(${r},${g*0.4},0,${opacity*0.8}) 68%, rgba(0,0,0,0) 80%)`;
-                searchlight.style.border = `2px dashed rgba(255, 60, 0, ${0.1 + (errorFactor * 0.3)})`;
-            } else {
-                // ZMIANA: Czysta, dobrze odcięta krawędź małego reflektora (wartości 70% -> 82%)
-                searchlight.style.background = `radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(240,250,255,0.95) 68%, rgba(0,0,0,0) 82%)`;
-                searchlight.style.border = `2px solid rgba(0, 180, 255, 0.45)`;
-            }
-        }
-
-        // --- PĘTLA GŁÓWNA GRY ---
+        // --- NOWA NATIVE CANVAS PĘTLA GRY ---
         function gameLoop() {
             if (!isGameRunning) return;
-
             let now = performance.now();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let currentOndulation = now * 0.003;
 
-            // 1. Autonomiczny ruch reflektora
+            // 1. Oblicz pozycję latarki automatycznej
             lightTime += 0.004;
             lightX = canvas.width / 2 + Math.sin(lightTime * 1.7) * (canvas.width * 0.38) + Math.cos(lightTime * 0.7) * (canvas.width * 0.05);
             lightY = canvas.height / 2 + Math.cos(lightTime * 1.2) * (canvas.height * 0.35) + Math.sin(lightTime * 2.1) * (canvas.height * 0.04);
 
-            searchlight.style.left = lightX + 'px';
-            searchlight.style.top = lightY + 'px';
-
-            applySearchlightBiofeedback();
-
-            // 2. Rysowanie wzorca na środku ekranu (ZMIANA: wyższa warstwa z-index w HTML u góry oraz parametr forceBright=true)
-            ctx.fillStyle = 'rgba(12, 12, 40, 0.85)';
-            ctx.strokeStyle = '#00ffcc';
-            ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 65, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-            
-            drawCreature(ctx, centerTarget.type, centerTarget.color, canvas.width/2, canvas.height/2, 45, 0, now * 0.003, true);
-
-            // 3. Aktualizacja i rysowanie stworów w toni
-            let currentOndulation = now * 0.003;
-
+            // Aktualizacja animacji płynięcia do środka
             for (let i = 0; i < seaCreatures.length; i++) {
                 let c = seaCreatures[i];
-
                 if (c.isMerging) {
                     c.mergeProgress += 0.04;
                     if (c.mergeProgress >= 1.0) {
-                        seaCreatures.splice(i, 1);
-                        i--;
-                        score += 10;
-                        updateHUD();
+                        seaCreatures.splice(i, 1); i--; score += 10; updateHUD();
                         if (seaCreatures.filter(obj => obj.isTarget).length === 0) {
-                            playSound(659.25, 0.4, "sine", 0.06);
-                            initLevel();
+                            playSound(659.25, 0.4, "sine", 0.06); initLevel();
                         }
                         continue;
                     }
@@ -390,20 +304,84 @@
                     c.y = c.startY + (canvas.height / 2 - c.startY) * c.mergeProgress;
                     c.size = 38 * (1.0 - c.mergeProgress * 0.4);
                 }
-
-                drawCreature(ctx, c.type, c.color, c.x, c.y, c.size, 0, currentOndulation + c.pulseOffset, false);
             }
+
+            // ================== RYSOWANIE WARSTW W CANVAS ==================
+            
+            // KROK A: Głębokie, ciemne tło oceanu
+            ctx.fillStyle = "#02020a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // KROK B: Rysowanie stworów jako ledwo widocznych "w mroku" (widzenie obwodowe / podgląd)
+            ctx.globalAlpha = 0.05; // 5% jasności w mroku
+            for (let c of seaCreatures) {
+                drawCreature(ctx, c.type, c.color, c.x, c.y, c.size, currentOndulation + c.pulseOffset);
+            }
+
+            // KROK C: Nakładanie maski i wycinanie otworów na jasne światło (Środek + Ruchoma Latarka)
+            ctx.save();
+            ctx.beginPath();
+            // Wycinamy otwór na latarkę ruchomą
+            ctx.arc(lightX, lightY, LIGHT_RADIUS, 0, Math.PI * 2);
+            // Wycinamy otwór na strefę centralną wzorca
+            ctx.arc(canvas.width / 2, canvas.height / 2, CENTER_RADIUS, 0, Math.PI * 2);
+            ctx.clip(); // Od tej pory rysujemy TYLKO wewnątrz tych dwóch kół
+
+            // Rozjaśnione tło pod kołami światła
+            ctx.fillStyle = "#050718";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Jasne tło specjalnie dla strefy centralnej wzorca
+            ctx.fillStyle = "rgba(18, 24, 55, 0.9)";
+            ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, CENTER_RADIUS, 0, Math.PI*2); ctx.fill();
+
+            // Obliczanie ściemnienia latarki na bazie biofeedbacku pozycji głowy
+            let errorFactor = Math.abs(currentHeadDeviation) / (HEAD_TOLERANCE * 2);
+            errorFactor = Math.max(0, Math.min(1, errorFactor));
+            
+            let lightAlpha = 1.0;
+            let beamColor = "#0bf";
+            if (isHeadMoving) {
+                lightAlpha = 1.0 - (errorFactor * 0.88); // Latarka ciemnieje do 12% jasności
+                beamColor = `rgba(255, ${Math.round(70 - errorFactor*70)}, 0, 0.4)`; // Przejście w ostrzegawczą czerwień
+            }
+
+            // Rysowanie stworów w pełnym świetle (100% jasności) wewnątrz maski
+            // 1. Stwory w toni (ich jasność reaguje na pozycję głowy)
+            ctx.globalAlpha = lightAlpha;
+            for (let c of seaCreatures) {
+                // Jeśli stwór akurat wpływa w promień światła, narysuje się w pełnej krasie
+                drawCreature(ctx, c.type, c.color, c.x, c.y, c.size, currentOndulation + c.pulseOffset);
+            }
+
+            // 2. Wzorzec na samym środku (jest ZAWSZE w 100% jasny i widoczny, niezależnie od ruchów głowy)
+            ctx.globalAlpha = 1.0;
+            drawCreature(ctx, centerTarget.type, centerTarget.color, canvas.width / 2, canvas.height / 2, 45, currentOndulation);
+
+            ctx.restore(); // Wyłączamy maskę przycinania dla reszty elementów graficznych
+
+            // KROK D: Rysowanie estetycznych obręczy/krawędzi reflektorów na wierzchu
+            // Obręcz środkowa (Wzorzec)
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = "#00ffcc";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, CENTER_RADIUS, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Obręcz ruchomej latarki (jej kolor zmienia się przy błędzie)
+            ctx.strokeStyle = isHeadMoving ? beamColor : "rgba(0, 200, 255, 0.7)";
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(lightX, lightY, LIGHT_RADIUS, 0, Math.PI * 2); ctx.stroke();
+
+            // ===============================================================
 
             // 4. Logowanie telemetrii
             let elapsed = now - sessionStartTime;
             if (elapsed - lastLogTime >= 50) {
                 telemetryLog.push({
-                    timestamp: Math.round(elapsed),
-                    lightX: Math.round(lightX),
-                    lightY: Math.round(lightY),
-                    headMovement: isHeadMoving ? 1 : 0,
-                    headDeviation: roundTo(currentHeadDeviation, 4),
-                    score: score
+                    timestamp: Math.round(elapsed), lightX: Math.round(lightX), lightY: Math.round(lightY),
+                    headMovement: isHeadMoving ? 1 : 0, headDeviation: roundTo(currentHeadDeviation, 4), score: score
                 });
                 lastLogTime = elapsed;
             }
@@ -413,13 +391,12 @@
 
         function roundTo(num, places) { return +(Math.round(num + "e+" + places)  + "e-" + places); }
 
-        // --- OBSŁUGA REAKCJI KLIENTA (SPACJA) ---
+        // --- OBSŁUGA STRZAŁU (SPACJA) ---
         window.addEventListener('keydown', (e) => {
             if (!isGameRunning) return;
 
             if (e.key === ' ' || e.code === 'Space') {
                 e.preventDefault();
-                let foundMatch = false;
 
                 for (let i = 0; i < seaCreatures.length; i++) {
                     let c = seaCreatures[i];
@@ -427,11 +404,11 @@
 
                     let distToLight = Math.hypot(c.x - lightX, c.y - lightY);
                     
-                    // ZMIANA: Dostosowanie strefy trafienia do mniejszego promienia latarki (85px zamiast 110px)
-                    if (distToLight < 85) { 
+                    // Czy stwór jest idealnie w promieniu naszej nowej latarki
+                    if (distToLight < LIGHT_RADIUS) { 
                         
                         if (isHeadMoving) {
-                            playSound(150, 0.15, "sawtooth", 0.07);
+                            playSound(150, 0.15, "sawtooth", 0.07); // Blokada przy złej postawie
                             break;
                         }
 
@@ -446,13 +423,11 @@
                             c.isMerging = true;
                             c.startX = c.x; c.startY = c.y;
                             playSound(440, 0.12, "sine", 0.06);
-                            foundMatch = true;
                             break;
                         } else {
                             playSound(220, 0.25, "triangle", 0.07);
                             score = Math.max(0, score - 5);
                             updateHUD();
-                            foundMatch = true;
                             break;
                         }
                     }
