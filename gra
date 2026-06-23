@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Podwodne Porządki — Trening Wzrokowy</title>
+<style>
+  :root{
+    --abyss-1:#040a13;
+    --abyss-2:#0b1d33;
+    --abyss-3:#102b47;
+    --glow-cyan:#5fe8d8;
+    --glow-warm:#fff3d6;
+    --alert-red:#ff5d5d;
+    --ink:#eaf6f6;
+    --ink-dim:#9fb8c9;
+    --panel:#0c1e30ee;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+    background:var(--abyss-1);
+    font-family:-apple-system,"SF Pro Rounded",ui-rounded,"Segoe UI",Verdana,sans-serif;
+    color:var(--ink);
+  }
+  button,input{font-family:inherit;}
+  #game{position:absolute;top:0;left:0;display:block;background:transparent;}
+  #game.hide-cursor{cursor:none;}
+
+  /* ---------- MENU ---------- */
+  #menu{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 30%, var(--abyss-3) 0%, var(--abyss-2) 45%, var(--abyss-1) 100%);
+    z-index:30;
+  }
+  #menuCard{
+    width:min(560px,92vw);
+    max-height:92vh;
+    overflow-y:auto;
+    background:var(--panel);
+    border:1px solid #1d3a52;
+    border-radius:22px;
+    padding:32px 34px 26px;
+    box-shadow:0 0 0 1px rgba(95,232,216,.06), 0 30px 80px -20px #000c, 0 0 60px -10px rgba(95,232,216,.12) inset;
+  }
+  #menuCard h1{
+    margin:0 0 4px;
+    font-size:30px;
+    letter-spacing:.3px;
+    font-weight:800;
+    background:linear-gradient(180deg,var(--glow-warm),var(--glow-cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  #menuCard .sub{margin:0 0 26px;color:var(--ink-dim);font-size:14.5px;line-height:1.5;}
+  fieldset{
+    border:1px solid #1c3650;border-radius:14px;margin:0 0 18px;padding:14px 16px 16px;
+  }
+  legend{
+    padding:0 8px;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--glow-cyan);font-weight:700;
+  }
+  .opt-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .opt{
+    flex:1 1 220px;position:relative;
+  }
+  .opt input{position:absolute;opacity:0;width:1px;height:1px;}
+  .opt label{
+    display:block;cursor:pointer;border:1px solid #1f3e5a;border-radius:12px;
+    padding:12px 14px;background:#0a1928;transition:.15s ease;
+  }
+  .opt label .t{display:block;font-weight:700;font-size:14.5px;margin-bottom:2px;}
+  .opt label .d{display:block;font-size:12px;color:var(--ink-dim);line-height:1.35;}
+  .opt input:checked + label{
+    border-color:var(--glow-cyan);
+    background:linear-gradient(180deg,#0d2536,#0a1928);
+    box-shadow:0 0 0 3px rgba(95,232,216,.16);
+  }
+  .opt input:focus-visible + label{outline:2px solid var(--glow-cyan);outline-offset:2px;}
+
+  .cam-toggle{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-dim);}
+  .cam-toggle input{width:17px;height:17px;accent-color:var(--glow-cyan);}
+  #camStatusLine{font-size:12.5px;margin-top:8px;color:var(--ink-dim);min-height:16px;}
+
+  #startBtn{
+    width:100%;margin-top:6px;padding:14px;border:none;border-radius:14px;
+    font-size:16.5px;font-weight:800;letter-spacing:.02em;cursor:pointer;
+    background:linear-gradient(180deg,var(--glow-cyan),#2fb9a8);color:#03211c;
+    box-shadow:0 8px 24px -8px rgba(95,232,216,.55);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  #startBtn:hover{transform:translateY(-1px);box-shadow:0 10px 28px -8px rgba(95,232,216,.7);}
+  #startBtn:focus-visible{outline:3px solid var(--glow-warm);outline-offset:2px;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;display:none;z-index:20;font-variant-numeric:tabular-nums;}
+  .hud-pill{
+    position:absolute;top:16px;background:#06131fcc;border:1px solid #1d3a52;
+    border-radius:12px;padding:8px 14px;font-size:13.5px;backdrop-filter:blur(2px);
+  }
+  #scorePill{left:16px;}
+  #scorePill b{color:var(--glow-cyan);font-size:16px;}
+  #roundPill{left:50%;transform:translateX(-50%);}
+  #roundPill b{color:var(--glow-warm);}
+  #menuBtn{
+    position:absolute;top:16px;right:16px;pointer-events:auto;
+    background:#06131fcc;border:1px solid #1d3a52;color:var(--ink-dim);
+    border-radius:12px;padding:8px 14px;font-size:13px;cursor:pointer;
+  }
+  #menuBtn:hover{color:var(--ink);}
+  #menuBtn:focus-visible{outline:2px solid var(--glow-cyan);}
+  #hint{
+    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    font-size:12.5px;color:var(--ink-dim);background:#06131fb3;border-radius:10px;
+    padding:6px 12px;white-space:nowrap;
+  }
+  #camPreviewWrap{
+    position:absolute;bottom:14px;right:14px;width:140px;
+    border:1px solid #1d3a52;border-radius:12px;overflow:hidden;background:#000;
+    box-shadow:0 6px 18px -6px #000a;
+  }
+  #camPreviewWrap canvas{display:block;width:100%;height:auto;transform:scaleX(-1);}
+  #camLabel{
+    font-size:11px;text-align:center;padding:4px 0;background:#06131fcc;color:var(--ink-dim);
+  }
+  #camLabel.warn{color:var(--alert-red);font-weight:700;}
+  #camLabel.ok{color:var(--glow-cyan);}
+
+  #flashOverlay{
+    position:absolute;inset:0;background:var(--alert-red);opacity:0;pointer-events:none;z-index:25;
+    transition:opacity .18s ease-out;
+  }
+
+  #toast{
+    position:absolute;top:64px;left:50%;transform:translateX(-50%) translateY(-8px);
+    background:#0c1e30ee;border:1px solid var(--glow-cyan);border-radius:10px;
+    padding:8px 16px;font-size:13px;opacity:0;transition:opacity .25s ease, transform .25s ease;
+    pointer-events:none;z-index:26;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width: 520px){
+    #menuCard{padding:24px 20px 20px;}
+    #menuCard h1{font-size:25px;}
+  }
+</style>
+</head>
+<body>
+
+  <div id="menu">
+    <div id="menuCard">
+      <h1>🌊 Podwodne Porządki</h1>
+      <p class="sub">Trening fiksacji wzrokowej i uwagi selektywnej. Dziecko śledzi wzrokiem krążące światło latarki i szuka stworów zgodnych z wzorem na środku ekranu — pracując samymi oczami, bez ruchu głowy.</p>
+
+      <fieldset>
+        <legend>Sterowanie latarką</legend>
+        <div class="opt-row">
+          <div class="opt">
+            <input type="radio" name="mode" id="modeAuto" value="auto" checked>
+            <label for="modeAuto">
+              <span class="t">Tryb autonomiczny</span>
+              <span class="d">Światło krąży samo, płynnym, nieprzewidywalnym ruchem. Dziecko tylko śledzi je oczami.</span>
+            </label>
+          </div>
+          <div class="opt">
+            <input type="radio" name="mode" id="modeMouse" value="mouse">
+            <label for="modeMouse">
+              <span class="t">Tryb myszy</span>
+              <span class="d">Światło podąża za ruchem myszki. Kursor systemowy jest niewidoczny.</span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Poziom trudności</legend>
+        <div class="opt-row">
+          <div class="opt">
+            <input type="radio" name="level" id="lvl1" value="1" checked>
+            <label for="lvl1">
+              <span class="t">Poziom 1 — gatunek</span>
+              <span class="d">Pasuje każdy stwór tego samego gatunku, niezależnie od koloru.</span>
+            </label>
+          </div>
+          <div class="opt">
+            <input type="radio" name="level" id="lvl2" value="2">
+            <label for="lvl2">
+              <span class="t">Poziom 2 — gatunek i kolor</span>
+              <span class="d">Pasuje tylko stwór tego samego gatunku ORAZ tego samego koloru.</span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Biofeedback — kamera</legend>
+        <label class="cam-toggle">
+          <input type="checkbox" id="useCam" checked>
+          Wykrywaj ruchy głowy kamerą (latarka gaśnie, gdy dziecko kręci głową)
+        </label>
+        <div id="camStatusLine">Po starcie naciśnij klawisz <b>R</b>, aby skalibrować pozycję startową.</div>
+      </fieldset>
+
+      <button id="startBtn">Zacznij grę</button>
+    </div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <video id="cam" autoplay playsinline muted style="display:none"></video>
+  <canvas id="camAnalysis" width="80" height="60" style="display:none"></canvas>
+
+  <div id="hud">
+    <div class="hud-pill" id="scorePill">Wynik: <b id="scoreVal">0</b></div>
+    <div class="hud-pill" id="roundPill">Runda <b id="roundVal">1</b></div>
+    <button id="menuBtn">⏸ Menu</button>
+    <div id="hint">SPACJA = zaznacz dopasowanie&nbsp;&nbsp;·&nbsp;&nbsp;R = kalibracja kamery&nbsp;&nbsp;·&nbsp;&nbsp;ESC = menu</div>
+    <div id="camPreviewWrap" style="display:none;">
+      <canvas id="camPreview" width="140" height="105"></canvas>
+      <div id="camLabel">kamera…</div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="flashOverlay"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   UTILITIES
+============================================================ */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const dist=(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1);
+const rand=(a,b)=>a+Math.random()*(b-a);
+const choice=(arr)=>arr[Math.floor(Math.random()*arr.length)];
+const easeOutCubic=t=>1-Math.pow(1-t,3);
+const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function hexToRgb(hex){
+  const n=parseInt(hex.slice(1),16);
+  return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
+}
+function mixColor(hexA,hexB,t){
+  const a=hexToRgb(hexA), b=hexToRgb(hexB);
+  const r=Math.round(lerp(a.r,b.r,t)), g=Math.round(lerp(a.g,b.g,t)), bl=Math.round(lerp(a.b,b.b,t));
+  return `rgb(${r},${g},${bl})`;
+}
+
+/* ============================================================
+   PALETTE / SPECIES
+============================================================ */
+const COLORS = {
+  czerwony:'#ff6b6b', zielony:'#51cf66', niebieski:'#4dabf7',
+  zolty:'#ffd43b', fioletowy:'#cc5de8', pomaranczowy:'#ff922e'
+};
+const COLOR_NAMES = Object.keys(COLORS);
+const SPECIES = ['krab','osmiornica','meduza','rozgwiazda','rybka'];
+const DIM_BASE = '#16263a';
+
+/* ============================================================
+   CREATURE DRAWING
+============================================================ */
+function drawStar(ctx,cx,cy,points,outerR,innerR,rot=0){
+  ctx.beginPath();
+  for(let i=0;i<points*2;i++){
+    const r = i%2===0?outerR:innerR;
+    const a = rot + (Math.PI/points)*i - Math.PI/2;
+    const x = cx+Math.cos(a)*r, y=cy+Math.sin(a)*r;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+}
+
+function drawCrab(ctx,x,y,s,fill,t,phase){
+  const wiggle = reducedMotion?0:Math.sin(t*3+phase)*0.06;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle=fill;
+  // legs
+  ctx.strokeStyle=fill; ctx.lineWidth=Math.max(1.5,s*0.06);
+  for(let i=-1;i<=1;i++){
+    if(i===0) continue;
+    for(const side of [-1,1]){
+      ctx.beginPath();
+      const lx = side*s*0.62, ly=i*s*0.18;
+      ctx.moveTo(side*s*0.4, i*s*0.22);
+      ctx.lineTo(lx+side*s*0.18, ly + s*0.18 + wiggle*10);
+      ctx.stroke();
+    }
+  }
+  // body
+  ctx.beginPath();
+  ctx.ellipse(0,0,s*0.62,s*0.42,0,0,Math.PI*2);
+  ctx.fill();
+  // claws
+  for(const side of [-1,1]){
+    ctx.beginPath();
+    ctx.ellipse(side*s*0.78, -s*0.26 + wiggle*4, s*0.2, s*0.15, side*0.5,0,Math.PI*2);
+    ctx.fill();
+  }
+  // eyes
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(-s*0.18,-s*0.14,s*0.08,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.18,-s*0.14,s*0.08,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#10202f';
+  ctx.beginPath();ctx.arc(-s*0.18,-s*0.14,s*0.035,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.18,-s*0.14,s*0.035,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawOctopus(ctx,x,y,s,fill,t,phase){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle=fill;
+  ctx.strokeStyle=fill;
+  ctx.lineWidth=Math.max(2,s*0.16);
+  ctx.lineCap='round';
+  const n=6;
+  for(let i=0;i<n;i++){
+    const baseA = -Math.PI*0.15 + (Math.PI*1.3)*(i/(n-1));
+    const w = reducedMotion?0:Math.sin(t*2.4+phase+i)*s*0.12;
+    const bx = Math.cos(baseA)*s*0.42, by = s*0.3+Math.sin(baseA)*s*0.12;
+    ctx.beginPath();
+    ctx.moveTo(bx,by);
+    ctx.quadraticCurveTo(bx+w, by+s*0.5, bx*0.4+w*0.5, by+s*0.95);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(0,0,s*0.48,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(-s*0.16,-s*0.06,s*0.1,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.16,-s*0.06,s*0.1,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#10202f';
+  ctx.beginPath();ctx.arc(-s*0.16,-s*0.06,s*0.045,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.16,-s*0.06,s*0.045,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawJellyfish(ctx,x,y,s,fill,t,phase){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle=fill;
+  ctx.strokeStyle=fill;
+  ctx.lineWidth=Math.max(1.5,s*0.07);
+  ctx.lineCap='round';
+  ctx.globalAlpha*=0.95;
+  ctx.beginPath();
+  ctx.arc(0,-s*0.05,s*0.5,Math.PI,0);
+  ctx.closePath();
+  ctx.fill();
+  const n=5;
+  for(let i=0;i<n;i++){
+    const bx = lerp(-s*0.38,s*0.38,i/(n-1));
+    const w = reducedMotion?0:Math.sin(t*2.6+phase+i*1.3)*s*0.14;
+    ctx.beginPath();
+    ctx.moveTo(bx,-s*0.05);
+    ctx.quadraticCurveTo(bx+w, s*0.4, bx+w*0.5, s*0.85);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawStarfish(ctx,x,y,s,fill,t,phase){
+  const rot = reducedMotion?0:Math.sin(t*0.6+phase)*0.08;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.fillStyle=fill;
+  drawStar(ctx,0,0,5,s*0.58,s*0.24,rot);
+  ctx.fill();
+  ctx.fillStyle='#10202f';
+  ctx.beginPath();ctx.arc(-s*0.08,-s*0.06,s*0.045,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.08,-s*0.06,s*0.045,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawFish(ctx,x,y,s,fill,t,phase){
+  const wiggle = reducedMotion?0:Math.sin(t*4+phase)*0.15;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(wiggle*0.2);
+  ctx.fillStyle=fill;
+  ctx.beginPath();
+  ctx.ellipse(0,0,s*0.5,s*0.32,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-s*0.42,0);
+  ctx.lineTo(-s*0.78,-s*0.26);
+  ctx.lineTo(-s*0.78,s*0.26);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0,-s*0.3);
+  ctx.lineTo(s*0.12,-s*0.52);
+  ctx.lineTo(s*0.26,-s*0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(s*0.22,-s*0.04,s*0.09,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#10202f';
+  ctx.beginPath();ctx.arc(s*0.24,-s*0.04,s*0.04,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+const DRAWERS = {krab:drawCrab, osmiornica:drawOctopus, meduza:drawJellyfish, rozgwiazda:drawStarfish, rybka:drawFish};
+
+function drawCreature(ctx, species, x, y, size, colorHex, brightness, t, phase){
+  const fillColor = mixColor(DIM_BASE, colorHex, clamp(brightness,0,1));
+  const alpha = 0.16 + 0.84*clamp(brightness,0,1);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // faint bioluminescent rim so silhouette/motion is always perceivable
+  ctx.shadowColor = 'rgba(140,200,220,0.25)';
+  ctx.shadowBlur = 3;
+  DRAWERS[species](ctx, x, y, size, fillColor, t, phase);
+  ctx.restore();
+}
+
+/* ============================================================
+   GAME STATE
+============================================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const state = {
+  mode:'auto', level:1, useCam:true,
+  running:false, score:0, round:1,
+  creatures:[],
+  target:{species:'krab', color:'czerwony'},
+  centerFade:1,
+  spot:{x:0,y:0, tx:0, ty:0, nextChange:0},
+  headMoved:false, camActive:false, calibrated:false,
+  baseline:{x:0,y:0},
+  particles:[],
+  bubbles:[],
+  lastAnalysis:0,
+  noDetectGrace:0,
+};
+
+const SPOT_RADIUS = 95;
+const CENTER_RADIUS = 130;
+const CENTER_SIZE = 80;
+const CREATURE_SIZE = 46;
+
+function resizeCanvas(){
+  const oldW = canvas.width||window.innerWidth, oldH = canvas.height||window.innerHeight;
+  const w = window.innerWidth, h = window.innerHeight;
+  const sx = w/oldW, sy = h/oldH;
+  if(canvas.width){
+    for(const c of state.creatures){ c.x*=sx; c.y*=sy; c.bx*=sx; c.by*=sy; }
+    state.spot.x*=sx; state.spot.y*=sy; state.spot.tx*=sx; state.spot.ty*=sy;
+  }
+  canvas.width=w; canvas.height=h;
+}
+window.addEventListener('resize', resizeCanvas);
+
+function center(){ return {x:canvas.width/2, y:canvas.height/2}; }
+
+/* ============================================================
+   ROUND / CREATURE SPAWNING
+============================================================ */
+function pickDecoyCombo(){
+  for(let tries=0;tries<30;tries++){
+    const sp = choice(SPECIES);
+    const col = choice(COLOR_NAMES);
+    if(state.level===1){
+      if(sp!==state.target.species) return {species:sp,color:col};
+    } else {
+      if(sp!==state.target.species || col!==state.target.color) return {species:sp,color:col};
+    }
+  }
+  return {species:choice(SPECIES.filter(s=>s!==state.target.species)), color:choice(COLOR_NAMES)};
+}
+
+function randomSpawnPos(existing){
+  const c = center();
+  const margin=70;
+  for(let tries=0;tries<40;tries++){
+    const x = rand(margin, canvas.width-margin);
+    const y = rand(margin, canvas.height-margin);
+    if(dist(x,y,c.x,c.y) < CENTER_RADIUS+40) continue;
+    let ok=true;
+    for(const e of existing){ if(dist(x,y,e.x,e.y) < CREATURE_SIZE*1.15){ ok=false; break; } }
+    if(ok) return {x,y};
+  }
+  return {x:rand(margin,canvas.width-margin), y:rand(margin,canvas.height-margin)};
+}
+
+function newRound(){
+  const oldSpecies = state.target.species, oldColor = state.target.color;
+  let ns, nc;
+  do{ ns=choice(SPECIES); nc=choice(COLOR_NAMES); } while(ns===oldSpecies && nc===oldColor && SPECIES.length>1);
+  state.target.species = ns; state.target.color = nc;
+  state.centerFade = 0;
+
+  state.creatures = [];
+  const matchCount = Math.min(3 + Math.floor((state.round-1)/2), 6);
+  const decoyCount = Math.min(6 + Math.floor((state.round-1)/2), 11);
+
+  for(let i=0;i<matchCount;i++){
+    const pos = randomSpawnPos(state.creatures);
+    state.creatures.push({
+      species: state.target.species,
+      color: state.level===2 ? state.target.color : choice(COLOR_NAMES),
+      x:pos.x, y:pos.y, bx:pos.x, by:pos.y,
+      phase: rand(0,Math.PI*2), removed:false, flying:false
+    });
+  }
+  for(let i=0;i<decoyCount;i++){
+    const pos = randomSpawnPos(state.creatures);
+    const combo = pickDecoyCombo();
+    state.creatures.push({
+      species: combo.species, color: combo.color,
+      x:pos.x, y:pos.y, bx:pos.x, by:pos.y,
+      phase: rand(0,Math.PI*2), removed:false, flying:false
+    });
+  }
+}
+
+function isMatch(creature){
+  if(state.level===1) return creature.species===state.target.species;
+  return creature.species===state.target.species && creature.color===state.target.color;
+}
+
+function remainingMatches(){
+  return state.creatures.filter(c=>!c.removed && isMatch(c)).length;
+}
+
+/* ============================================================
+   SPOTLIGHT MOVEMENT
+============================================================ */
+function pickNewWanderTarget(now){
+  const margin=60;
+  state.spot.tx = rand(margin, canvas.width-margin);
+  state.spot.ty = rand(margin, canvas.height-margin);
+  state.spot.nextChange = now + rand(900,2200);
+}
+
+function updateSpotlight(now, dtSec){
+  if(state.mode==='mouse') return; // position set directly by mousemove handler
+  if(now > state.spot.nextChange) pickNewWanderTarget(now);
+  const speed = 1 - Math.pow(0.001, dtSec); // smooth easing factor
+  state.spot.x = lerp(state.spot.x, state.spot.tx, clamp(speed*1.6,0,1));
+  state.spot.y = lerp(state.spot.y, state.spot.ty, clamp(speed*1.6,0,1));
+}
+
+let mouseX=0, mouseY=0, mouseSet=false;
+canvas.addEventListener('mousemove', e=>{
+  const r = canvas.getBoundingClientRect();
+  mouseX = e.clientX - r.left; mouseY = e.clientY - r.top;
+  mouseSet = true;
+});
+
+/* ============================================================
+   PARTICLES
+============================================================ */
+function spawnBubbleBurst(x,y,colorHex){
+  for(let i=0;i<14;i++){
+    state.particles.push({
+      x:x+rand(-8,8), y:y+rand(-8,8),
+      vx:rand(-30,30), vy:rand(-90,-40),
+      r:rand(3,7), life:1, color:colorHex
+    });
+  }
+}
+function spawnAmbientBubble(){
+  if(reducedMotion && Math.random()>0.3) return;
+  state.bubbles.push({
+    x:rand(0,canvas.width), y:canvas.height+10,
+    vy:rand(-30,-12), r:rand(2,5), wob:rand(0,Math.PI*2), alpha:rand(0.08,0.22)
+  });
+}
+
+/* ============================================================
+   HEAD TRACKING (lightweight, dependency-free)
+============================================================ */
+const video = document.getElementById('cam');
+const analysisCanvas = document.getElementById('camAnalysis');
+const actx = analysisCanvas.getContext('2d', {willReadFrequently:true});
+const previewCanvas = document.getElementById('camPreview');
+const pctx = previewCanvas.getContext('2d');
+let camStream=null;
+
+async function initCamera(){
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{width:160,height:120}, audio:false});
+    video.srcObject = camStream;
+    await video.play();
+    state.camActive = true;
+    document.getElementById('camPreviewWrap').style.display='block';
+    setCamLabel('Naciśnij R aby się skalibrować','');
+  }catch(err){
+    state.camActive = false;
+    document.getElementById('camPreviewWrap').style.display='none';
+    showToast('Kamera niedostępna — gra działa bez wykrywania ruchu głowy.');
+  }
+}
+function stopCamera(){
+  if(camStream){ camStream.getTracks().forEach(tr=>tr.stop()); camStream=null; }
+  state.camActive=false; state.calibrated=false;
+}
+function setCamLabel(text,cls){
+  const el = document.getElementById('camLabel');
+  el.textContent = text; el.className = cls||'';
+}
+
+function analyzeFrame(){
+  if(!state.camActive || video.readyState<2) return null;
+  actx.drawImage(video,0,0,analysisCanvas.width,analysisCanvas.height);
+  let data;
+  try{ data = actx.getImageData(0,0,analysisCanvas.width,analysisCanvas.height).data; }
+  catch(e){ return null; }
+  let sumX=0,sumY=0,count=0;
+  const w=analysisCanvas.width,h=analysisCanvas.height;
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const r=data[i],g=data[i+1],b=data[i+2];
+      if(r>95 && g>40 && b>20 && (Math.max(r,g,b)-Math.min(r,g,b))>15 && Math.abs(r-g)>15 && r>g && r>b){
+        sumX+=x; sumY+=y; count++;
+      }
+    }
+  }
+  if(count<25) return null;
+  return {x:sumX/count, y:sumY/count, count};
+}
+
+function calibrate(){
+  if(!state.camActive){ showToast('Kamera nie jest aktywna.'); return; }
+  const c = analyzeFrame();
+  if(c){
+    state.baseline = {x:c.x, y:c.y};
+    state.calibrated = true;
+    state.noDetectGrace = 0;
+    showToast('Skalibrowano pozycję ✓');
+  } else {
+    showToast('Nie wykryto twarzy — popraw oświetlenie i spróbuj ponownie.');
+  }
+}
+
+function updateHeadTracking(now){
+  if(!state.camActive){ state.headMoved=false; return; }
+  if(!state.calibrated){ setCamLabel('Naciśnij R aby się skalibrować',''); return; }
+  const c = analyzeFrame();
+  if(!c){
+    state.noDetectGrace++;
+    if(state.noDetectGrace>6){ setCamLabel('Nie widzę twarzy','warn'); }
+    return;
+  }
+  state.noDetectGrace = 0;
+  const dx = c.x - state.baseline.x;
+  const dy = c.y - state.baseline.y;
+  const d = Math.hypot(dx,dy);
+  const threshold = analysisCanvas.width * 0.16;
+  state.headMoved = d > threshold;
+  setCamLabel(state.headMoved?'Ruch głowy!':'Pozycja OK', state.headMoved?'warn':'ok');
+
+  // mirrored preview with marker
+  pctx.save();
+  pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  pctx.drawImage(video,0,0,previewCanvas.width,previewCanvas.height);
+  const sx = previewCanvas.width/analysisCanvas.width, sy=previewCanvas.height/analysisCanvas.height;
+  pctx.strokeStyle = state.headMoved?'#ff5d5d':'#5fe8d8';
+  pctx.lineWidth=2;
+  pctx.beginPath(); pctx.arc(c.x*sx, c.y*sy, 6,0,Math.PI*2); pctx.stroke();
+  pctx.strokeStyle='rgba(255,255,255,0.4)';
+  pctx.beginPath(); pctx.arc(state.baseline.x*sx, state.baseline.y*sy, threshold*sx,0,Math.PI*2); pctx.stroke();
+  pctx.restore();
+}
+
+/* ============================================================
+   AUDIO (WebAudio, no external files)
+============================================================ */
+let actxAudio=null;
+function audioCtx(){ if(!actxAudio) actxAudio = new (window.AudioContext||window.webkitAudioContext)(); return actxAudio; }
+function playTone(freqStart,freqEnd,dur,type,vol){
+  try{
+    const ac = audioCtx();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqStart, ac.currentTime);
+    osc.frequency.linearRampToValueAtTime(freqEnd, ac.currentTime+dur);
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(); osc.stop(ac.currentTime+dur);
+  }catch(e){}
+}
+function playSuccess(){ playTone(520,880,0.28,'sine',0.18); }
+function playError(){ playTone(180,90,0.32,'sawtooth',0.16); }
+
+/* ============================================================
+   UI HELPERS
+============================================================ */
+let toastTimer=null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+function flashError(){
+  const f = document.getElementById('flashOverlay');
+  f.style.opacity='0.28';
+  setTimeout(()=>{ f.style.opacity='0'; }, 180);
+}
+function updateHud(){
+  document.getElementById('scoreVal').textContent = state.score;
+  document.getElementById('roundVal').textContent = state.round;
+}
+
+/* ============================================================
+   INTERACTION
+============================================================ */
+function mostIlluminatedCreature(){
+  let best=null, bestD=Infinity;
+  for(const c of state.creatures){
+    if(c.removed || c.flying) continue;
+    const d = dist(c.x,c.y, state.spot.x, state.spot.y);
+    if(d < SPOT_RADIUS*0.62 && d < bestD){ bestD=d; best=c; }
+  }
+  return best;
+}
+
+function correctHit(creature){
+  creature.flying = true;
+  creature.flightStart = performance.now();
+  creature.flightFromX = creature.x; creature.flightFromY = creature.y;
+  state.score += 10;
+  updateHud();
+}
+
+function finishFlight(creature){
+  creature.removed = true;
+  const c = center();
+  spawnBubbleBurst(c.x, c.y, COLORS[creature.color]);
+  playSuccess();
+  if(remainingMatches()===0){
+    setTimeout(()=>{ state.round++; newRound(); updateHud(); }, 550);
+  }
+}
+
+function wrongHit(creature){
+  state.score = Math.max(0, state.score-5);
+  updateHud();
+  flashError();
+  playError();
+}
+
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){
+    if(!state.running) return;
+    e.preventDefault();
+    if(state.headMoved) return;
+    const lit = mostIlluminatedCreature();
+    if(!lit) return;
+    if(isMatch(lit)) correctHit(lit); else wrongHit(lit);
+  } else if(e.key.toLowerCase()==='r'){
+    if(state.running) calibrate();
+  } else if(e.key==='Escape'){
+    if(state.running) returnToMenu();
+  }
+});
+
+/* ============================================================
+   MAIN LOOP
+============================================================ */
+let lastTs=0, ambientTimer=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(!state.running) return;
+  const dtSec = lastTs? clamp((ts-lastTs)/1000,0,0.05) : 0.016;
+  lastTs = ts;
+  const t = ts/1000;
+
+  if(state.mode==='mouse' && mouseSet){
+    state.spot.x = mouseX; state.spot.y = mouseY;
+  } else {
+    updateSpotlight(ts, dtSec);
+  }
+
+  if(state.useCam && ts - state.lastAnalysis > 80){
+    updateHeadTracking(ts);
+    state.lastAnalysis = ts;
+  }
+
+  state.centerFade = Math.min(1, state.centerFade + dtSec*2.2);
+
+  ambientTimer += dtSec;
+  if(ambientTimer > (reducedMotion?0.6:0.22)){ ambientTimer=0; spawnAmbientBubble(); }
+
+  for(const b of state.bubbles){ b.y += b.vy*dtSec; b.x += Math.sin(t*1.5+b.wob)*8*dtSec; }
+  state.bubbles = state.bubbles.filter(b=>b.y>-20);
+
+  for(const p of state.particles){
+    p.x += p.vx*dtSec; p.y += p.vy*dtSec; p.vy += 60*dtSec; p.life -= dtSec*1.4;
+  }
+  state.particles = state.particles.filter(p=>p.life>0);
+
+  for(const c of state.creatures){
+    if(c.removed) continue;
+    if(c.flying){
+      const elapsed = (performance.now()-c.flightStart)/550;
+      const e = easeOutCubic(clamp(elapsed,0,1));
+      const ctr = center();
+      c.x = lerp(c.flightFromX, ctr.x, e);
+      c.y = lerp(c.flightFromY, ctr.y, e);
+      if(elapsed>=1) finishFlight(c);
+    } else if(!reducedMotion){
+      c.x = c.bx + Math.sin(t*0.7+c.phase)*7;
+      c.y = c.by + Math.cos(t*0.55+c.phase*1.3)*6;
+    }
+  }
+
+  render(t);
+}
+
+function render(t){
+  const w=canvas.width, h=canvas.height;
+  const c = center();
+
+  const bg = ctx.createRadialGradient(c.x,c.y,40, w/2,h/2, Math.max(w,h)*0.75);
+  bg.addColorStop(0,'#0d2236');
+  bg.addColorStop(0.45,'#081523');
+  bg.addColorStop(1,'#020608');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.fillStyle='rgba(140,200,220,0.5)';
+  for(const b of state.bubbles){
+    ctx.globalAlpha=b.alpha;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // spotlight glow graphic
+  const headBad = state.headMoved;
+  const beamColor = headBad? '255,93,93' : '255,245,214';
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const beam = ctx.createRadialGradient(state.spot.x,state.spot.y,0, state.spot.x,state.spot.y,SPOT_RADIUS*1.05);
+  beam.addColorStop(0, `rgba(${beamColor},${headBad?0.16:0.30})`);
+  beam.addColorStop(0.6, `rgba(${beamColor},${headBad?0.06:0.12})`);
+  beam.addColorStop(1, `rgba(${beamColor},0)`);
+  ctx.fillStyle=beam;
+  ctx.beginPath(); ctx.arc(state.spot.x,state.spot.y,SPOT_RADIUS*1.05,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // background creatures
+  for(const cr of state.creatures){
+    if(cr.removed) continue;
+    let bright;
+    if(cr.flying){
+      bright=1;
+    } else {
+      const d = dist(cr.x,cr.y,state.spot.x,state.spot.y);
+      const raw = clamp(1-d/SPOT_RADIUS,0,1);
+      bright = headBad? 0 : raw;
+    }
+    drawCreature(ctx, cr.species, cr.x, cr.y, CREATURE_SIZE, COLORS[cr.color], bright, t, cr.phase);
+  }
+
+  // center halo (always bright)
+  const halo = ctx.createRadialGradient(c.x,c.y,0, c.x,c.y,CENTER_RADIUS);
+  halo.addColorStop(0,'rgba(255,248,224,0.30)');
+  halo.addColorStop(0.55,'rgba(255,248,224,0.10)');
+  halo.addColorStop(1,'rgba(255,248,224,0)');
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle=halo;
+  ctx.beginPath(); ctx.arc(c.x,c.y,CENTER_RADIUS,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = state.centerFade;
+  drawCreature(ctx, state.target.species, c.x, c.y, CENTER_SIZE, COLORS[state.target.color], 1, t, 0);
+  ctx.restore();
+
+  // success particles
+  for(const p of state.particles){
+    ctx.globalAlpha = clamp(p.life,0,1);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ============================================================
+   MENU / LIFECYCLE
+============================================================ */
+function returnToMenu(){
+  state.running=false;
+  stopCamera();
+  document.getElementById('menu').style.display='flex';
+  document.getElementById('hud').style.display='none';
+  canvas.classList.remove('hide-cursor');
+}
+
+document.getElementById('startBtn').addEventListener('click', async ()=>{
+  state.mode = document.querySelector('input[name=mode]:checked').value;
+  state.level = parseInt(document.querySelector('input[name=level]:checked').value,10);
+  state.useCam = document.getElementById('useCam').checked;
+  state.score=0; state.round=1; state.headMoved=false; state.calibrated=false;
+
+  document.getElementById('menu').style.display='none';
+  document.getElementById('hud').style.display='block';
+  canvas.classList.toggle('hide-cursor', state.mode==='mouse');
+
+  resizeCanvas();
+  state.spot.x = canvas.width/2; state.spot.y = canvas.height/3;
+  state.spot.tx = state.spot.x; state.spot.ty = state.spot.y;
+  mouseSet=false;
+
+  if(state.useCam){ await initCamera(); }
+  else { document.getElementById('camPreviewWrap').style.display='none'; }
+
+  newRound();
+  updateHud();
+  state.running=true;
+  showToast(state.useCam? 'Naciśnij R, aby skalibrować kamerę' : 'Start!');
+});
+
+document.getElementById('menuBtn').addEventListener('click', returnToMenu);
+
+window.addEventListener('beforeunload', stopCamera);
+
+/* ============================================================
+   BOOT
+============================================================ */
+resizeCanvas();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
